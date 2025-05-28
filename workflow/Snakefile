@@ -24,13 +24,15 @@ rule get_torsionnet_500_input:
         cd ../..
         """
 
-rule run_torsionnet_500:
+rule run_fits:
     input:
-        config_file="configs/{config}.yaml"
+        config_file="configs/{config}.yaml",
+        # All any workflow dir to be used for the fits
+        smiles_file="torsionnet_500/input/smiles.csv"
     output:
-        force_field="torsionnet_500/{config}/combined_forcefield.offxml"
+        force_field="torsionnet_500/output/{config}/combined_forcefield.offxml"
     run:
-        run_bespokefit_all_smiles(input.config_file, "torsionnet_500", "{config}")
+        run_bespokefit_all_smiles(input.config_file, input.smiles_file, "torsionnet_500", wildcards.config)
 
 rule run_bespokefit_smee:
     input:

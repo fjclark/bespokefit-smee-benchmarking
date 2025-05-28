@@ -1,8 +1,10 @@
 """Utilities to help with the workflow."""
 
+import copy
 from pathlib import Path
 from typing import List
 
+import loguru
 import pandas as pd
 from bespokefit_smee.analysis import plot_all
 from bespokefit_smee.settings import TrainingConfig
@@ -10,6 +12,10 @@ from bespokefit_smee.train import train
 from openff.toolkit import ForceField
 from openff.toolkit.typing.engines.smirnoff import ForceField
 from tqdm import tqdm
+
+logger = loguru.logger
+
+BASE_FF = "openff_unconstrained-2.2.1.offxml"
 
 
 def combine_force_fields(
@@ -73,24 +79,23 @@ def combine_force_fields(
 
 
 def run_bespokefit_single_smiles(
-    config_path: str, output_dir: str, smiles: str
+    config: TrainingConfig, output_dir: Path, smiles: str
 ) -> ForceField:
     """Run BespokeFit with the given configuration, output directory, and SMILES."""
 
-    # Load the training configuration
-    config = TrainingConfig.from_yaml(config_path)
-    config.smiles = smiles
+    # Avoid modifying the original config
+    config_copy = copy.deepcopy(config)
 
-    # Change to the output directory and run
-    output_path = Path(output_dir).resolve()
-    with output_path.cwd():
-        final_ff = train(config)
+    # Load the training configuration
+    config_copy.smiles = smiles
+    config_copy.output_dir = output_dir
+    final_ff = train(config_copy)
 
     return final_ff
 
 
 def run_bespokefit_all_smiles(
-    config_path: str, workflow_dir: str, name: str
+    config_path: str, smiles_file: str, workflow_dir: str, name: str
 ) -> ForceField:
     """Run BespokeFit for all SMILES in the workflow directory. Expects a 'smiles.csv' in
     workflow_dir / input"""
@@ -99,7 +104,7 @@ def run_bespokefit_all_smiles(
     config = TrainingConfig.from_yaml(config_path)
 
     # Load the SMILES from the input file
-    input_path = Path(workflow_dir) / "input" / "smiles.csv"
+    input_path = Path(smiles_file)
     if not input_path.exists():
         raise FileNotFoundError(f"Input file {input_path} does not exist.")
     smiles_df = pd.read_csv(input_path)
@@ -107,25 +112,28 @@ def run_bespokefit_all_smiles(
     # Fit all the smiles
     force_fields = []
 
-    for i, smiles in tqdm(
-        enumerate(smiles_df["smiles"]), desc="Processing SMILES", total=len(smiles_df)
+    for smiles_id, smiles in tqdm(
+        zip(smiles_df["id"], smiles_df["smiles"]),
+        desc="Processing SMILES",
+        total=len(smiles_df),
     ):
         # Create a directory for each SMILES
-        smiles_dir = Path(workflow_dir) / "output" / name / f"smiles_{i}"
+        smiles_dir = (Path(workflow_dir) / "output" / name / str(smiles_id)).resolve()
+        logger.info(f"Processing SMILES: {smiles[1]} in directory {smiles_dir}")
         smiles_dir.mkdir(exist_ok=True)
 
         # Save the SMILES to a file
         with open(smiles_dir / "molecule.smi", "w") as f:
-            f.write(smiles)
+            f.write(str(smiles))
 
         # Run BespokeFit
-        config.smiles = smiles
-        config.output_dir = str(smiles_dir.resolve())
-        final_ff = train(config)
+        final_ff = run_bespokefit_single_smiles(
+            config, output_dir=smiles_dir, smiles=smiles
+        )
         force_fields.append(final_ff)
 
     return combine_force_fields(
         force_fields,
         output_file=f"output/{name}/combined_force_field.offxml",
-        base_ff="openff_unconstrained-2.2.1.offxml",
+        base_ff=BASE_FF,
     )

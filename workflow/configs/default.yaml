@@ -27,7 +27,7 @@ data: null
 memory: false
 linear_harmonics: true
 linear_torsions: false
-use_modified_seminaro: false
+use_modified_seminario: false
 modified_seminario_finite_step: 0.005291772
 modified_seminario_tolerance: 0.0001
 modified_seminario_vib_scaling: 0.957

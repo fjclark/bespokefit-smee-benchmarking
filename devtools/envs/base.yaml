@@ -3,6 +3,7 @@ name: bespokefit_smee
 channels:
   - conda-forge
   - bioconda
+  - openeye
 
 dependencies:
     # Base dependencies
@@ -28,6 +29,7 @@ dependencies:
     - loguru
     - qcelemental
     - openff-qcsubmit
+    - openeye-toolkit
 
     # Workflow
     - snakemake
