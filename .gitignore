@@ -172,3 +172,10 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Snakemake
+.snakemake/
+
+# Workflow input and output directories
+workflow/torsionnet_500/input/
+workflow/torsionnet_500/output/

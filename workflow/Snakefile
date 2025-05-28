@@ -1,0 +1,45 @@
+from utils import run_bespokefit_all_smiles
+
+# List your config files here or use a wildcard/glob to find them
+CONFIGS, = glob_wildcards("configs/{config}.yaml")
+
+rule all:
+    input:
+        expand("results/{config}.benchmark.txt", config=CONFIGS)
+
+rule get_torsionnet_500_input:
+    output:
+        "torsionnet_500/input/smiles.csv",
+        "torsionnet_500/input/TNet500_minimal_dataset.json"
+    shell:
+        """
+        mkdir -p torsionnet_500/input
+        cd torsionnet_500/input
+        curl https://zenodo.org/records/11385284/files/TNet500_minimal.zip?download=1 -o TNet500_minimal.zip
+        unzip TNet500_minimal.zip
+        rm TNet500_minimal.zip
+        rm -r __MACOSX
+        python ../scripts/create_dataset.py
+        python ../scripts/extract_smiles.py
+        cd ../..
+        """
+
+rule run_torsionnet_500:
+    input:
+        config_file="configs/{config}.yaml"
+    output:
+        force_field="torsionnet_500/{config}/combined_forcefield.offxml"
+    run:
+        run_bespokefit_all_smiles(input.config_file, "torsionnet_500", "{config}")
+
+rule run_bespokefit_smee:
+    input:
+        config_file="configs/{config}.yaml"
+    output:
+        benchmark="results/{config}.benchmark.txt"
+    shell:
+        """
+        bespokefit-smee benchmark --config {input.config_file} > {output.benchmark}
+        """
+
+# Add more rules for other benchmarking stages as needed, e.g. preprocessing, postprocessing, etc.
