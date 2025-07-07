@@ -29,7 +29,8 @@ dependencies:
     - loguru
     - qcelemental
     - openff-qcsubmit
-    - openeye-toolkit
+    - openeye-toolkits
+    - seaborn
 
     # Workflow
     - snakemake
