@@ -27,21 +27,32 @@ rule get_torsionnet_500_input:
 rule run_fits:
     input:
         config_file="configs/{config}.yaml",
-        # All any workflow dir to be used for the fits
-        smiles_file="torsionnet_500/input/smiles.csv"
+        smiles_file="{benchmark_dir}/input/smiles.csv"
     output:
-        force_field="torsionnet_500/output/{config}/combined_forcefield.offxml"
+        force_field="{benchmark_dir}/output/{config}/combined_forcefield.offxml"
     run:
-        run_bespokefit_all_smiles(input.config_file, input.smiles_file, "torsionnet_500", wildcards.config)
+        run_bespokefit_all_smiles(input.config_file,
+                                  input.smiles_file,
+                                  wildcards.benchmark_dir,
+                                  wildcards.config)
 
-rule run_bespokefit_smee:
+rule analyse_torsionnet_500:
     input:
-        config_file="configs/{config}.yaml"
+        # config_file="configs/{config}.yaml",
+        force_field="torsionnet_500/output/{config}/combined_forcefield.offxml",
+        input_data="torsionnet_500/input/TNet500_minimal_dataset.json"
     output:
-        benchmark="results/{config}.benchmark.txt"
+        dummy_output="torsionnet_500/analysis/{config}_dummy_output.txt"
     shell:
         """
-        bespokefit-smee benchmark --config {input.config_file} > {output.benchmark}
+        mkdir -p torsionnet_500/analysis
+        cd torsionnet_500/analysis
+        yammbs_analyse_torsions --base-force-fields openff-2.2.1 \
+        --extra-force-fields ../output/espaloma03/combined_forcefield.offxml \
+        --extra-force-fields ../output/aimnet2/combined_forcefield.offxml \
+        --extra-force-fields ../output/aimnet2_metad/combined_forcefield.offxml \
+        --extra-force-fields ../output/{wildcards.config}/combined_forcefield.offxml \
+        --qcarchive-torsion-data ../input/TNet500_minimal_dataset.json &&
+        touch {output.dummy_output}
+        cd ../..
         """
-
-# Add more rules for other benchmarking stages as needed, e.g. preprocessing, postprocessing, etc.

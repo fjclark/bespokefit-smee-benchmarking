@@ -6,7 +6,7 @@ from typing import List
 
 import loguru
 import pandas as pd
-from bespokefit_smee.analysis import plot_all
+from bespokefit_smee.analysis import OutputData, plot_all
 from bespokefit_smee.settings import TrainingConfig
 from bespokefit_smee.train import train
 from openff.toolkit import ForceField
@@ -19,7 +19,7 @@ BASE_FF = "openff_unconstrained-2.2.1.offxml"
 
 
 def combine_force_fields(
-    ff_to_combine: List[ForceField],
+    ff_to_combine: dict[str, ForceField],
     output_file: str,
     base_ff: str = "openff_unconstrained-2.2.1.offxml",
 ) -> ForceField:
@@ -36,7 +36,7 @@ def combine_force_fields(
     original_force_field = ForceField(base_ff)
     combined_force_field = ForceField(base_ff)
 
-    for ff in ff_to_combine:
+    for ff_name, ff in ff_to_combine.items():
         # Load each force field and add its parameters to the combined force field
         for handler_name in ff.registered_parameter_handlers:
             handler = ff.get_parameter_handler(handler_name)
@@ -56,7 +56,7 @@ def combine_force_fields(
                     continue
 
                 # Make the parameter id unique by adding the input file directory name
-                parameter.id += f"_{Path(input_file).parent.name}"
+                parameter.id += f"_{ff_name}"
 
                 # Skip parameters that are already included in the base force field
                 if parameter.smirks in original_parameter_smirks:
@@ -66,7 +66,6 @@ def combine_force_fields(
                 if parameter.smirks in new_parameters:
                     raise ValueError(
                         f"New parameter ID {parameter.id} {parameter} already exists in the combined force field."
-                        f"\nInput file: {input_file}, Handler: {handler_name}"
                     )
 
                 combined_handler.add_parameter(parameter.to_dict())
@@ -91,6 +90,10 @@ def run_bespokefit_single_smiles(
     config_copy.output_dir = output_dir
     final_ff = train(config_copy)
 
+    # Plot results
+    output_data = OutputData(config_copy)
+    plot_all(output_data)
+
     return final_ff
 
 
@@ -109,9 +112,6 @@ def run_bespokefit_all_smiles(
         raise FileNotFoundError(f"Input file {input_path} does not exist.")
     smiles_df = pd.read_csv(input_path)
 
-    # Fit all the smiles
-    force_fields = []
-
     for smiles_id, smiles in tqdm(
         zip(smiles_df["id"], smiles_df["smiles"]),
         desc="Processing SMILES",
@@ -119,6 +119,12 @@ def run_bespokefit_all_smiles(
     ):
         # Create a directory for each SMILES
         smiles_dir = (Path(workflow_dir) / "output" / name / str(smiles_id)).resolve()
+
+        # If it already exists, skip it
+        if smiles_dir.exists():
+            logger.info(f"Skipping existing directory: {smiles_dir}")
+            continue
+
         logger.info(f"Processing SMILES: {smiles[1]} in directory {smiles_dir}")
         smiles_dir.mkdir(exist_ok=True)
 
@@ -127,13 +133,21 @@ def run_bespokefit_all_smiles(
             f.write(str(smiles))
 
         # Run BespokeFit
-        final_ff = run_bespokefit_single_smiles(
-            config, output_dir=smiles_dir, smiles=smiles
-        )
-        force_fields.append(final_ff)
+        run_bespokefit_single_smiles(config, output_dir=smiles_dir, smiles=smiles)
+
+    # Combine all force fields in the output directory
+    force_fields = {}
+    output_path = Path(workflow_dir) / "output" / name
+    for smiles_id in smiles_df["id"]:
+        file = output_path / str(smiles_id) / f"trained-{config.n_iterations}.offxml"
+        logger.info(f"Loading force field from {file}")
+        force_fields[str(smiles_id)] = ForceField(file)
+
+    output_ff_path = output_path / "combined_forcefield.offxml"
+    logger.info(f"Combining {len(force_fields)} force fields into {output_ff_path}")
 
     return combine_force_fields(
         force_fields,
-        output_file=f"output/{name}/combined_force_field.offxml",
+        output_file=str(output_ff_path),
         base_ff=BASE_FF,
     )
