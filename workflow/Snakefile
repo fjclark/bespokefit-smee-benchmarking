@@ -51,6 +51,7 @@ rule analyse_torsionnet_500:
         --extra-force-fields ../output/espaloma03/combined_forcefield.offxml \
         --extra-force-fields ../output/aimnet2/combined_forcefield.offxml \
         --extra-force-fields ../output/aimnet2_metad/combined_forcefield.offxml \
+        --extra-force-fields ../output/egret1_metad/combined_forcefield.offxml \
         --extra-force-fields ../output/{wildcards.config}/combined_forcefield.offxml \
         --qcarchive-torsion-data ../input/TNet500_minimal_dataset.json &&
         touch {output.dummy_output}

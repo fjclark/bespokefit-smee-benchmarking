@@ -28,6 +28,9 @@ def get_qca_torsion_dataset(
     input_files = sorted(input_dir.glob("*.json"))
 
     for i, json_file in enumerate(input_files):
+        if i == 150:
+            break
+
         result = TorsionDriveResult.parse_file(json_file)
 
         # Check if the smiles string is in the provided list
