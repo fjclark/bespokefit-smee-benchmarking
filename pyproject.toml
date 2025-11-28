@@ -1,0 +1,49 @@
+[project]
+name = "bespokefit-smee-benchmark"
+version = "0.1.0"
+description = "BespokeFit SMEE benchmarking"
+requires-python = ">=3.11"
+
+[tool.pixi.project]
+channels = ["conda-forge", "bioconda", "openeye"]
+platforms = ["linux-64"]
+
+[tool.pixi.system-requirements]
+cuda = "12"
+
+[tool.pixi.dependencies]
+python = ">=3.11"
+pyyaml = "*"
+datasets = "*"
+jupyter = "*"
+nglview = "*"
+smirnoff-plugins = ">=0.0.4"
+openmm = ">=8.2"
+openff-toolkit = "*"
+openff-units = "*"
+openff-interchange = "*"
+openmm-ml = "*"
+tensorboardX = "*"
+tensorboard = "*"
+versioneer = "*"
+pytorch-gpu = "*"
+pydantic = ">=2"
+pydantic-settings = "*"
+loguru = "*"
+qcelemental = "*"
+openff-qcsubmit = "*"
+openeye-toolkits = "*"
+seaborn = "*"
+snakemake = "*"
+cuda-version = ">=12.0"
+
+[tool.pixi.pypi-dependencies]
+mace-torch = "*"
+smee = { git = "https://github.com/thomasjamespope/smee.git" }
+descent = { git = "https://github.com/SimonBoothroyd/descent.git"}
+bespokefit_smee = { git = "https://github.com/fjclark/bespokefit_smee.git" }
+yammbs = { git = "https://github.com/openforcefield/yammbs.git", rev = "torsion-analysis" }
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
