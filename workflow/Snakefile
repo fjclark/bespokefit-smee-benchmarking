@@ -1,7 +1,14 @@
 from utils import run_bespokefit_all_smiles
+import os
 
 # List your config files here or use a wildcard/glob to find them
 CONFIGS, = glob_wildcards("configs/{config}.yaml")
+
+# Get hyperparameter tuning configs if they exist
+if os.path.exists("hyperparameter_tuning/configs"):
+    HP_CONFIGS, = glob_wildcards("hyperparameter_tuning/configs/{config}.yaml")
+else:
+    HP_CONFIGS = []
 
 rule all:
     input:
@@ -25,6 +32,33 @@ rule get_hyperparameter_tuning_input:
         python ../scripts/split_valid_test.py
         cd ../..
         """
+
+rule get_hyperparameter_tuning_configs:
+    output:
+        directory("hyperparameter_tuning/configs")
+    shell:
+        """
+        mkdir -p hyperparameter_tuning/configs
+        cd hyperparameter_tuning
+        python scripts/create_configs.py
+        cd ..
+        """
+
+rule run_hyperparameter_tuning:
+    input:
+        config_dir="hyperparameter_tuning/configs",
+        smiles_file="hyperparameter_tuning/input/validation_set/smiles.csv"
+    output:
+        force_fields=expand("hyperparameter_tuning/output/{config}/combined_forcefield.offxml",
+                                    config=HP_CONFIGS)
+    run:
+        for config in HP_CONFIGS:
+            config_file = f"hyperparameter_tuning/configs/{config}.yaml"
+            run_bespokefit_all_smiles(config_file,
+                                      input.smiles_file,
+                                      "hyperparameter_tuning",
+                                      config)
+        
 
 rule get_torsionnet_500_input:
     output:

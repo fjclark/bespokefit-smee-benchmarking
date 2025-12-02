@@ -314,6 +314,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/networkx-3.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nglview-4.0-pyh309af5b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/nlohmann_json-3.12.0-h54a6638_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/nnpops-0.6-cuda126py312h62b6de3_14.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/notebook-7.5.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/notebook-shim-0.2.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/numexpr-2.14.1-mkl_py312hf8315b2_1.conda
@@ -528,7 +529,7 @@ environments:
       - pypi: git+https://github.com/fjclark/bespokefit_smee.git?rev=feature-improved-training-and-regularisation#26c4d1420c369ee5de145bfedc841dc636cdd70d
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6a/c9/3bf4473e3b8131a733219346ff90cdab98e019b90c944fc339a599fc8896/deepchem-2.8.0-py3-none-any.whl
-      - pypi: git+https://github.com/SimonBoothroyd/descent.git#7cd8062e2ff222047dfaccc6e45facf614abe9db
+      - pypi: git+https://github.com/fjclark/descent.git?rev=feature-regularization#feb75c851817b15b82f50ccfd85cb30811adaf71
       - pypi: https://files.pythonhosted.org/packages/c4/b2/6f8e3d6dda02e30fde68dbaf5cb09c98db0383a755c0c72c9d13064d3138/dm_haiku-0.0.15-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9a/b6/c8327065d1dd8bca28521fe65ff72b649ed17ca8a1f0c1f498006d7567b7/e3nn-0.4.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/e7/19b8cfc8963b2e10a01a4db7bb27ec5fa39ecd024bc62f8e2d1de5625a9d/jax-0.8.1-py3-none-any.whl
@@ -549,7 +550,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/32/d5/f9a850d79b0851d1d4ef6456097579a9005b31fea68726a4ae5f2d82ddd9/threadpoolctl-3.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
-      - pypi: git+https://github.com/openforcefield/yammbs#988776417dfa610a6ae3ddcc031f6e3f819648ec
+      - pypi: git+https://github.com/openforcefield/yammbs#51d7db954dec44da4504a20735cf168216039948
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
   build_number: 7
@@ -2037,9 +2038,9 @@ packages:
   - pkg:pypi/defusedxml?source=hash-mapping
   size: 24062
   timestamp: 1615232388757
-- pypi: git+https://github.com/SimonBoothroyd/descent.git#7cd8062e2ff222047dfaccc6e45facf614abe9db
+- pypi: git+https://github.com/fjclark/descent.git?rev=feature-regularization#feb75c851817b15b82f50ccfd85cb30811adaf71
   name: descent
-  version: 0.5.3.dev2+g7cd8062e2
+  version: 0.1.dev46+gfeb75c851
   requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/noarch/dill-0.3.8-pyhd8ed1ab_0.conda
   sha256: 482b5b566ca559119b504c53df12b08f3962a5ef8e48061d62fd58a47f8f2ec4
@@ -5138,6 +5139,26 @@ packages:
   purls: []
   size: 136216
   timestamp: 1758194284857
+- conda: https://conda.anaconda.org/conda-forge/linux-64/nnpops-0.6-cuda126py312h62b6de3_14.conda
+  sha256: b97760f9945aed23d5df445146e5ce26bcd602faf9bf43a4bd9f109b1d48c811
+  md5: 3245ffc5a9a3dc0eeca131d98d9f1c95
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - cuda-version >=12.6,<13
+  - libgcc >=13
+  - libstdcxx >=13
+  - libtorch >=2.6.0,<2.7.0a0
+  - python >=3.12,<3.13.0a0
+  - python_abi 3.12.* *_cp312
+  - pytorch >=2.6.0,<2.7.0a0
+  - torchani
+  constrains:
+  - pytorch =*=cuda*
+  license: MIT
+  license_family: MIT
+  purls: []
+  size: 960203
+  timestamp: 1739965137998
 - conda: https://conda.anaconda.org/conda-forge/noarch/notebook-7.5.0-pyhcf101f3_0.conda
   sha256: 87b420456c294076d8414043d05ebd743e2ed42526889590b667aa6a99b34d54
   md5: 3cf7402eb77b6434e830b6863a0e6118
@@ -8246,9 +8267,9 @@ packages:
   purls: []
   size: 85189
   timestamp: 1753484064210
-- pypi: git+https://github.com/openforcefield/yammbs#988776417dfa610a6ae3ddcc031f6e3f819648ec
+- pypi: git+https://github.com/openforcefield/yammbs#51d7db954dec44da4504a20735cf168216039948
   name: yammbs
-  version: 0.2.0.post70+g9887764
+  version: 0.2.0.post71+g51d7db9
 - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.22.0-py312h8a5da7c_0.conda
   sha256: 6e3f2db09387fc982b5400b842745084825cd2d4621e8278e4af8fb0dc2b55d8
   md5: 6a3fd177315aaafd4366930d440e4430

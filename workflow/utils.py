@@ -121,7 +121,7 @@ def run_bespokefit_all_smiles(
             continue
 
         logger.info(f"Processing SMILES: {smiles[1]} in directory {smiles_dir}")
-        smiles_dir.mkdir(exist_ok=True)
+        smiles_dir.mkdir(exist_ok=True, parents=True)
 
         # Save the SMILES to a file
         with open(smiles_dir / "molecule.smi", "w") as f:

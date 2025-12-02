@@ -38,11 +38,12 @@ snakemake = "*"
 pydantic-units = "*"
 qcfractal = ">=0.63"
 cuda-version = ">=12.0"
+nnpops = "*"
 
 [tool.pixi.pypi-dependencies]
 mace-torch = "*"
 smee = { git = "https://github.com/thomasjamespope/smee.git" }
-descent = { git = "https://github.com/SimonBoothroyd/descent.git"}
+descent = { git = "https://github.com/fjclark/descent.git", rev = "feature-regularization" }
 bespokefit_smee = { git = "https://github.com/fjclark/bespokefit_smee.git", rev = "feature-improved-training-and-regularisation" }
 yammbs = { git = "https://github.com/openforcefield/yammbs"}
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Seems to interfere with pytorch if ["torch"]
