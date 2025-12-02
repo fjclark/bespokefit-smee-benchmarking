@@ -6,9 +6,8 @@ from typing import List
 
 import loguru
 import pandas as pd
-from bespokefit_smee.analysis import OutputData, plot_all
-from bespokefit_smee.settings import TrainingConfig
-from bespokefit_smee.train import train
+from bespokefit_smee.settings import WorkflowSettings
+from bespokefit_smee.workflow import get_bespoke_force_field
 from openff.toolkit import ForceField
 from openff.toolkit.typing.engines.smirnoff import ForceField
 from tqdm import tqdm
@@ -78,7 +77,7 @@ def combine_force_fields(
 
 
 def run_bespokefit_single_smiles(
-    config: TrainingConfig, output_dir: Path, smiles: str
+    config: WorkflowSettings, output_dir: Path, smiles: str
 ) -> ForceField:
     """Run BespokeFit with the given configuration, output directory, and SMILES."""
 
@@ -86,13 +85,9 @@ def run_bespokefit_single_smiles(
     config_copy = copy.deepcopy(config)
 
     # Load the training configuration
-    config_copy.smiles = smiles
+    config_copy.parameterisation_settings.smiles = smiles
     config_copy.output_dir = output_dir
-    final_ff = train(config_copy)
-
-    # Plot results
-    output_data = OutputData(config_copy)
-    plot_all(output_data)
+    final_ff = get_bespoke_force_field(config_copy)
 
     return final_ff
 
@@ -104,7 +99,7 @@ def run_bespokefit_all_smiles(
     workflow_dir / input"""
 
     # Load the training configuration
-    config = TrainingConfig.from_yaml(config_path)
+    config = WorkflowSettings.from_yaml(config_path)
 
     # Load the SMILES from the input file
     input_path = Path(smiles_file)
@@ -139,7 +134,21 @@ def run_bespokefit_all_smiles(
     force_fields = {}
     output_path = Path(workflow_dir) / "output" / name
     for smiles_id in smiles_df["id"]:
-        file = output_path / str(smiles_id) / f"trained-{config.n_iterations}.offxml"
+        # file = output_path / str(smiles_id) / f"trained-{config.n_iterations}.offxml"
+        # Find the highest iteration number available
+        max_iteration = 0
+        for iteration_dir in (output_path / str(smiles_id)).glob(
+            "training_iteration_*"
+        ):
+            iteration_number = int(iteration_dir.name.split("_")[-1])
+            if iteration_number > max_iteration:
+                max_iteration = iteration_number
+        file = (
+            output_path
+            / str(smiles_id)
+            / f"training_iteration_{max_iteration}"
+            / "bespoke_ff.offxml"
+        )
         logger.info(f"Loading force field from {file}")
         force_fields[str(smiles_id)] = ForceField(file)
 

@@ -7,6 +7,25 @@ rule all:
     input:
         expand("results/{config}.benchmark.txt", config=CONFIGS)
 
+rule get_hyperparameter_tuning_input:
+    output:
+        "hyperparameter_tuning/input/test_set/smiles.csv",
+        "hyperparameter_tuning/input/test_set/test_set.json",
+        "hyperparameter_tuning/input/validation_set/smiles.csv",
+        "hyperparameter_tuning/input/validation_set/validation_set.json"
+    shell:
+        """
+        mkdir -p hyperparameter_tuning/input
+        cd hyperparameter_tuning/input
+        curl https://zenodo.org/records/11385284/files/TNet500_minimal.zip?download=1 -o TNet500_minimal.zip
+        unzip TNet500_minimal.zip
+        rm TNet500_minimal.zip
+        rm -r __MACOSX
+        python ../scripts/create_dataset.py
+        python ../scripts/split_valid_test.py
+        cd ../..
+        """
+
 rule get_torsionnet_500_input:
     output:
         "torsionnet_500/input/smiles.csv",

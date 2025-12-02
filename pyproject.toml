@@ -21,6 +21,7 @@ smirnoff-plugins = ">=0.0.4"
 openmm = ">=8.2"
 openff-toolkit = "*"
 openff-units = "*"
+openff-qcsubmit = ">=0.55.0"
 openff-interchange = "*"
 openmm-ml = "*"
 tensorboardX = "*"
@@ -31,18 +32,20 @@ pydantic = ">=2"
 pydantic-settings = "*"
 loguru = "*"
 qcelemental = "*"
-openff-qcsubmit = "*"
 openeye-toolkits = "*"
 seaborn = "*"
 snakemake = "*"
+pydantic-units = "*"
+qcfractal = ">=0.63"
 cuda-version = ">=12.0"
 
 [tool.pixi.pypi-dependencies]
 mace-torch = "*"
 smee = { git = "https://github.com/thomasjamespope/smee.git" }
 descent = { git = "https://github.com/SimonBoothroyd/descent.git"}
-bespokefit_smee = { git = "https://github.com/fjclark/bespokefit_smee.git" }
-yammbs = { git = "https://github.com/openforcefield/yammbs.git", rev = "torsion-analysis" }
+bespokefit_smee = { git = "https://github.com/fjclark/bespokefit_smee.git", rev = "feature-improved-training-and-regularisation" }
+yammbs = { git = "https://github.com/openforcefield/yammbs"}
+deepchem = { version = ">=2.7.0", extras = ["jax"] } # Seems to interfere with pytorch if ["torch"]
 
 [build-system]
 requires = ["setuptools>=45", "wheel"]
