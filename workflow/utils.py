@@ -14,13 +14,13 @@ from tqdm import tqdm
 
 logger = loguru.logger
 
-BASE_FF = "openff_unconstrained-2.2.1.offxml"
+BASE_FF = "openff_unconstrained-2.3.0-rc2.offxml"
 
 
 def combine_force_fields(
     ff_to_combine: dict[str, ForceField],
     output_file: str,
-    base_ff: str = "openff_unconstrained-2.2.1.offxml",
+    base_ff: str = "openff_unconstrained-2.3.0-rc2.offxml",
 ) -> ForceField:
     """
     Combines multiple OpenFF force field XML files into a single force field, starting with a base force field.

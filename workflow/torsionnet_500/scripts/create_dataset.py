@@ -28,8 +28,6 @@ def get_qca_torsion_dataset(
     input_files = sorted(input_dir.glob("*.json"))
 
     for i, json_file in enumerate(input_files):
-        if i == 150:
-            break
 
         result = TorsionDriveResult.parse_file(json_file)
 
@@ -51,6 +49,7 @@ def get_qca_torsion_dataset(
         qm_torsions.append(
             QCArchiveTorsionProfile(
                 id=i,
+                qcarchive_id=i,
                 mapped_smiles=smiles,
                 dihedral_indices=dihedral_indices,
                 coordinates=coordinates,
