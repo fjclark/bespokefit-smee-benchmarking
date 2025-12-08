@@ -1,4 +1,5 @@
 from utils import run_bespokefit_all_smiles
+import subprocess
 import os
 
 # List your config files here or use a wildcard/glob to find them
@@ -58,7 +59,41 @@ rule run_hyperparameter_tuning:
                                       input.smiles_file,
                                       "hyperparameter_tuning",
                                       config)
-        
+
+# Analyse all the hyperparameter tuning results at once
+rule analyse_hyperparameter_tuning:
+    input:
+        force_fields=expand("hyperparameter_tuning/output/{config}/combined_forcefield.offxml",
+                                    config=HP_CONFIGS),
+        input_data="hyperparameter_tuning/input/validation_set/validation_set.json"
+    output:
+        dummy_output="hyperparameter_tuning/analysis/dummy_output.txt"
+    run:
+        from yammbs.scripts.run_torsion_comparisons import main
+        from bespokefit_smee.utils.rdkit_bespoke_wrapper import use_bespoke_rdkit_toolkit
+        from pathlib import Path
+        analysis_dir = Path("hyperparameter_tuning/analysis")
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        os.chdir(analysis_dir)
+
+        extra_force_fields = [
+            f"../output/{config}/combined_forcefield.offxml"
+            for config in HP_CONFIGS
+        ]
+
+        cmd = [
+            "yammbs_analyse_torsions",
+            "--base-force-fields", "openff_unconstrained-2.3.0-rc2.offxml",
+            "--qcarchive-torsion-data", "../input/validation_set/validation_set.json",
+        ]
+        for ff in extra_force_fields:
+            cmd.extend(["--extra-force-fields", ff])
+
+        subprocess.run(cmd, check=True)
+        os.chdir("../..")
+
+        with open(output.dummy_output, 'w') as f:
+            f.write("Analysis complete.\n")
 
 rule get_torsionnet_500_input:
     output:
@@ -100,13 +135,18 @@ rule analyse_torsionnet_500:
         """
         mkdir -p torsionnet_500/analysis
         cd torsionnet_500/analysis
-        yammbs_analyse_torsions --base-force-fields openff-2.2.1 \
+        yammbs_analyse_torsions --base-force-fields openff_unconstrained-2.3.0-rc2.offxml \
         --extra-force-fields ../output/espaloma03/combined_forcefield.offxml \
-        --extra-force-fields ../output/aimnet2/combined_forcefield.offxml \
-        --extra-force-fields ../output/aimnet2_metad/combined_forcefield.offxml \
-        --extra-force-fields ../output/egret1_metad/combined_forcefield.offxml \
+        --extra-force-fields ../output/egret1_reg_metd/combined_forcefield.offxml \
         --extra-force-fields ../output/{wildcards.config}/combined_forcefield.offxml \
         --qcarchive-torsion-data ../input/TNet500_minimal_dataset.json &&
         touch {output.dummy_output}
         cd ../..
         """
+        # yammbs_analyse_torsions --base-force-fields openff-2.2.1 \
+        # --extra-force-fields ../output/espaloma03_sage_nb/combined_forcefield.offxml \
+        # --extra-force-fields ../output/egret1_opt/combined_forcefield.offxml \
+        # --extra-force-fields ../output/espaloma03/combined_forcefield.offxml \
+        # --extra-force-fields ../output/aimnet2/combined_forcefield.offxml \
+        # --extra-force-fields ../output/aimnet2_metad/combined_forcefield.offxml \
+        # --extra-force-fields ../output/egret1_metad/combined_forcefield.offxml \
