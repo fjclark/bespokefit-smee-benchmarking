@@ -39,6 +39,9 @@ pydantic-units = "*"
 qcfractal = ">=0.63"
 cuda-version = ">=12.0"
 nnpops = "*"
+ipdb = "*"
+bokeh = "*"
+panel = "*"
 
 [tool.pixi.pypi-dependencies]
 mace-torch = "*"
