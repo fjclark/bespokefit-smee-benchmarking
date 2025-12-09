@@ -137,12 +137,25 @@ rule analyse_torsionnet_500:
         cd torsionnet_500/analysis
         yammbs_analyse_torsions --base-force-fields openff_unconstrained-2.3.0-rc2.offxml \
         --extra-force-fields ../output/espaloma03/combined_forcefield.offxml \
-        --extra-force-fields ../output/egret1_reg_metd/combined_forcefield.offxml \
         --extra-force-fields ../output/{wildcards.config}/combined_forcefield.offxml \
         --qcarchive-torsion-data ../input/TNet500_minimal_dataset.json &&
         touch {output.dummy_output}
         cd ../..
         """
+        # """
+        # mkdir -p torsionnet_500/analysis
+        # cd torsionnet_500/analysis
+        # yammbs_analyse_torsions --base-force-fields openff-2.2.1 \
+        # --base-force-fields openff_unconstrained-2.3.0-rc2.offxml \
+        # --base-force-fields openff_no_water_unconstrained-3.0.0-alpha0.offxml \
+        # --extra-force-fields ../output/espaloma03/combined_forcefield.offxml \
+        # --extra-force-fields ../output/{wildcards.config}/combined_forcefield.offxml \
+        # --qcarchive-torsion-data ../input/TNet500_minimal_dataset.json &&
+        # touch {output.dummy_output}
+        # cd ../..
+        # """
+        # --extra-force-fields ../output/egret1_reg_metd/combined_forcefield.offxml \
+        # --extra-force-fields ../output/egret1_reg_metd/combined_forcefield.offxml \
         # yammbs_analyse_torsions --base-force-fields openff-2.2.1 \
         # --extra-force-fields ../output/espaloma03_sage_nb/combined_forcefield.offxml \
         # --extra-force-fields ../output/egret1_opt/combined_forcefield.offxml \
@@ -150,3 +163,28 @@ rule analyse_torsionnet_500:
         # --extra-force-fields ../output/aimnet2/combined_forcefield.offxml \
         # --extra-force-fields ../output/aimnet2_metad/combined_forcefield.offxml \
         # --extra-force-fields ../output/egret1_metad/combined_forcefield.offxml \
+
+rule get_jacs_conformers_input:
+    output:
+        "jacs_set_conformers/input/smiles.csv"
+    shell:
+        """
+        cd jacs_set_conformers/input
+        python ../scripts/extract_smiles.py
+        cd ../..
+        """
+
+rule analyse_jacs_conformers:
+    input:
+        force_field="jacs_set_conformers/output/{config}/combined_forcefield.offxml",
+        input_data="jacs_set_conformers/input/smiles.csv"
+    output:
+        dummy_output="jacs_set_conformers/analysis/{config}_dummy_output.txt"
+    shell:
+        """
+        mkdir -p jacs_set_conformers/analysis
+        cd jacs_set_conformers
+        python scripts/analyse.py {config} ../{input.force_field}
+        touch {output.dummy_output}
+        cd ..
+        """

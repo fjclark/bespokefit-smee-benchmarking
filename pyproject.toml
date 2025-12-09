@@ -42,6 +42,8 @@ nnpops = "*"
 ipdb = "*"
 bokeh = "*"
 panel = "*"
+openbabel = "*"
+crest = "*"
 
 [tool.pixi.pypi-dependencies]
 mace-torch = "*"
