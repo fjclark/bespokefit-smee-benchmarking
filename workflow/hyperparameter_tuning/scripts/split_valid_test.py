@@ -10,7 +10,7 @@ from pathlib import Path
 
 JSON_FILE = "TNet500_minimal_dataset.json"
 SMILES_NAME = "smiles.csv"
-FRAC_TEST = 0.96  # We'll use the 4 % = 20 molecules for validation
+FRAC_TEST = 0.80  # We'll use the 20 % = 100 molecules for validation
 SEED = 0
 VALIDATION_OUTPUT_PATH = Path("validation_set")
 TEST_OUTPUT_PATH = Path("test_set")

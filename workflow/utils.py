@@ -63,6 +63,17 @@ def combine_force_fields(
 
                 # Raise an error if a parameter is already present in the combined force field
                 if parameter.smirks in new_parameters:
+                    current_new_params = combined_handler[parameter.smirks]
+                    # Check if the dicts (other than id) are the same
+                    if all(
+                        parameter.to_dict()[key] == current_new_params.to_dict()[key]
+                        for key in parameter.to_dict()
+                        if key != "id"
+                    ):
+                        logger.info(
+                            f"Parameter {parameter.smirks} from {ff_name} is identical to existing parameter. Skipping."
+                        )
+                        continue
                     raise ValueError(
                         f"New parameter ID {parameter.id} {parameter} already exists in the combined force field."
                     )
@@ -77,7 +88,11 @@ def combine_force_fields(
 
 
 def run_bespokefit_single_smiles(
-    config: WorkflowSettings, output_dir: Path, smiles: str
+    config: WorkflowSettings,
+    output_dir: Path,
+    smiles: str,
+    smiles_id: str,
+    from_precomputed: bool = False,
 ) -> ForceField:
     """Run BespokeFit with the given configuration, output directory, and SMILES."""
 
@@ -87,13 +102,37 @@ def run_bespokefit_single_smiles(
     # Load the training configuration
     config_copy.parameterisation_settings.smiles = smiles
     config_copy.output_dir = output_dir
+
+    # If from precomputed is True, we need to overwrite the CHANGEME placeholders
+    # in the dataset and force field paths
+    if from_precomputed:
+        config_copy.training_sampling_settings.dataset_path = (
+            config_copy.training_sampling_settings.dataset_path.as_posix().replace(
+                "CHANGEME", smiles_id
+            )
+        )
+        config_copy.testing_sampling_settings.dataset_path = (
+            config_copy.testing_sampling_settings.dataset_path.as_posix().replace(
+                "CHANGEME", smiles_id
+            )
+        )
+        config_copy.parameterisation_settings.initial_force_field = (
+            config_copy.parameterisation_settings.initial_force_field.replace(
+                "CHANGEME", smiles_id
+            )
+        )
+
     final_ff = get_bespoke_force_field(config_copy)
 
     return final_ff
 
 
 def run_bespokefit_all_smiles(
-    config_path: str, smiles_file: str, workflow_dir: str, name: str
+    config_path: str,
+    smiles_file: str,
+    workflow_dir: str,
+    name: str,
+    from_precomputed: bool = False,
 ) -> ForceField:
     """Run BespokeFit for all SMILES in the workflow directory. Expects a 'smiles.csv' in
     workflow_dir / input"""
@@ -128,7 +167,13 @@ def run_bespokefit_all_smiles(
             f.write(str(smiles))
 
         # Run BespokeFit
-        run_bespokefit_single_smiles(config, output_dir=smiles_dir, smiles=smiles)
+        run_bespokefit_single_smiles(
+            config,
+            output_dir=smiles_dir,
+            smiles=smiles,
+            smiles_id=str(smiles_id),
+            from_precomputed=from_precomputed,
+        )
 
     # Combine all force fields in the output directory
     force_fields = {}
@@ -143,14 +188,15 @@ def run_bespokefit_all_smiles(
             iteration_number = int(iteration_dir.name.split("_")[-1])
             if iteration_number > max_iteration:
                 max_iteration = iteration_number
+        if max_iteration == 0:
+            raise ValueError(
+                f"No training iterations found for SMILES ID {smiles_id} in {output_path / str(smiles_id)}"
+            )
         file = (
-            output_path
-            / str(smiles_id)
-            / f"training_iteration_{max_iteration}"
-            / "bespoke_ff.offxml"
+            output_path / str(smiles_id) / f"training_iteration_1" / "bespoke_ff.offxml"
         )
         logger.info(f"Loading force field from {file}")
-        force_fields[str(smiles_id)] = ForceField(file)
+        force_fields[str(smiles_id)] = ForceField(str(file))
 
     output_ff_path = output_path / "combined_forcefield.offxml"
     logger.info(f"Combining {len(force_fields)} force fields into {output_ff_path}")

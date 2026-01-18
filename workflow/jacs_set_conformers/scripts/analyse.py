@@ -11,6 +11,9 @@ from openff.interchange import Interchange
 import numpy as np
 import pandas as pd
 import typer
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from openff.toolkit.utils.exceptions import RadicalsNotSupportedError
 
 from bespokefit_smee.sample import _get_ml_omm_system, _get_integrator
 from openmm.app import Simulation
@@ -19,11 +22,13 @@ import matplotlib.pyplot as plt
 import pickle as pkl
 from loguru import logger
 
+# Set the random seed for reproducibility
+np.random.seed(42)
+
 plt.style.use("ggplot")
 
 
 LIGANDS_CSV_PATH = Path("input/smiles.csv")
-OVERALL_STATS_PATH = Path("crest_ensemble_overall_stats.pkl")
 CREST_DIR = Path("crest")
 OUTPUT_DIR = Path("analysis")
 CREST_RMSD_THRESHOLDS = {
@@ -32,6 +37,7 @@ CREST_RMSD_THRESHOLDS = {
     "P38_p38a_2n": 1.0,
     "TYK2_ejm_31": 0.125,
 }
+MAX_CONFORMERS_PER_MOL = 50
 
 
 def openmm_to_openff_positions(
@@ -100,9 +106,9 @@ def write_crest_toml(output_path: str = "crest.toml", rthr: float = 0.125) -> No
         "method='gfnff'",
         "[cregen]",
         "ewin=6.0",
-        "ethr=0.2",
-        "bthr=99",
-        f"rthr=5000",
+        # "ethr=0.2",
+        # "bthr=99",
+        f"rthr={rthr}",
     ]
 
     output_path.write_text("\n".join(file_contents))
@@ -175,7 +181,7 @@ def run_crest_for_all(
 
 
 def get_energies_and_positions_mlp(
-    mol: Molecule, mlp_name: str = "egret-1"
+    mol: Molecule, mlp_name: str = "egret-1", minimise: bool = True
 ) -> tuple[list[unit.Quantity], list[unit.Quantity]]:
     """
     Get single-point energies for all conformers in an SDF file using a machine learning potential.
@@ -183,6 +189,7 @@ def get_energies_and_positions_mlp(
     Parameters:
         mol (Molecule): The molecule containing conformers.
         mlp_name (str): The name of the machine learning potential to use.
+        minimise (bool): Whether to minimise the conformers before calculating energies.
 
     Returns:
         list[unit.Quantity]: A list of energies for each conformer.
@@ -196,7 +203,8 @@ def get_energies_and_positions_mlp(
     min_positions = []
     for positions in mol.conformers:
         ml_simulation.context.setPositions(positions.to_openmm())
-        ml_simulation.minimizeEnergy(maxIterations=0)
+        if minimise:
+            ml_simulation.minimizeEnergy(maxIterations=0)
         state = ml_simulation.context.getState(getEnergy=True, getPositions=True)
         energy = state.getPotentialEnergy().value_in_unit(omm_unit.kilocalorie_per_mole)
         energies.append(energy * unit.kilocalorie / unit.mole)
@@ -206,19 +214,22 @@ def get_energies_and_positions_mlp(
 
 
 def get_energies_ff(
-    mol: Molecule, omm_system: openmm.openmm.System
+    mol: Molecule, ff: ForceField, minimise: bool = True
 ) -> tuple[list[unit.Quantity], list[unit.Quantity]]:
     """
     Get single-point energies for all conformers in an SDF file using a force field.
 
     Parameters:
         mol (Molecule): The molecule containing conformers.
-        omm_system (openmm.openmm.System): The OpenMM system containing the force field parameters.
+        ff (ForceField): The force field to use.
+        minimise (bool): Whether to minimise the conformers before calculating energies.
 
     Returns:
         list[unit.Quantity]: A list of energies for each conformer.
         list[unit.Quantity]: A list of minimised positions for each conformer.
     """
+    omm_system = Interchange.from_smirnoff(ff, mol.to_topology()).to_openmm()
+
     integrator = _get_integrator(300 * omm_unit.kelvin, 1.0 * omm_unit.femtoseconds)
     simulation = Simulation(mol.to_topology().to_openmm(), omm_system, integrator)
 
@@ -226,13 +237,134 @@ def get_energies_ff(
     min_positions = []
     for positions in mol.conformers:
         simulation.context.setPositions(positions.to_openmm())
-        simulation.minimizeEnergy(maxIterations=0)
+        if minimise:
+            simulation.minimizeEnergy(maxIterations=0)
         state = simulation.context.getState(getEnergy=True, getPositions=True)
         energy = state.getPotentialEnergy().value_in_unit(omm_unit.kilocalorie_per_mole)
         energies.append(energy * unit.kilocalorie / unit.mole)
         min_positions.append(state.getPositions())
 
     return energies, min_positions
+
+
+def save_conformers_to_sdf(
+    mol: Molecule,
+    positions: list,
+    energies: list[unit.Quantity],
+    output_path: Path,
+    name_prefix: str = "conformer",
+) -> None:
+    """
+    Save conformers to an SDF file with titles set as relative energies.
+
+    Parameters:
+        mol: The base molecule.
+        positions: List of positions for each conformer.
+        energies: List of energies for each conformer.
+        output_path: Path to save the SDF file.
+        name_prefix: Prefix for conformer names.
+    """
+    # Calculate relative energies (relative to first conformer)
+    energies_array = np.array([e.magnitude for e in energies])
+    relative_energies = energies_array - energies_array[0]
+
+    # Create a molecule with all conformers
+    output_mols = []
+    for i, (pos, rel_energy) in enumerate(zip(positions, relative_energies)):
+        mol_copy = Molecule(mol)
+        mol_copy.conformers.clear()
+
+        # Convert positions if needed
+        if isinstance(pos[0], openmm.unit.Quantity):
+            pos_unitless = [coord.value_in_unit(omm_unit.angstrom) for coord in pos]
+            mol_copy.add_conformer(unit.Quantity(pos_unitless, "angstrom"))
+        else:
+            mol_copy.add_conformer(pos)
+
+        # Set the name/title as the relative energy
+        mol_copy.name = f"{name_prefix}_{i:03d}_rel_energy_{rel_energy:.4f}_kcal_mol"
+        output_mols.append(mol_copy.to_rdkit())
+
+    # Write all molecules to SDF
+    with Chem.SDWriter(str(output_path)) as sdf_writer:
+        for mol in output_mols:
+            sdf_writer.write(mol)
+
+
+def read_conformers_from_sdf(
+    sdf_path: Path,
+) -> tuple[list, list[unit.Quantity]]:
+    """
+    Read conformers from an SDF file and extract energies from titles.
+
+    Parameters:
+        sdf_path: Path to the SDF file.
+
+    Returns:
+        Tuple of (energies, positions) where positions are OpenMM quantities
+        and energies are relative to the first conformer.
+    """
+    mols = Molecule.from_file(str(sdf_path))
+    if not isinstance(mols, list):
+        mols = [mols]
+
+    positions = []
+    relative_energies = []
+
+    for mol in mols:
+        # Extract relative energy from the molecule name
+        # Format: prefix_XXX_rel_energy_Y.YYYY_kcal_mol
+        if mol.name and "rel_energy" in mol.name:
+            parts = mol.name.split("_rel_energy_")
+            if len(parts) > 1:
+                energy_str = parts[1].replace("_kcal_mol", "")
+                rel_energy = float(energy_str)
+                relative_energies.append(rel_energy)
+            else:
+                relative_energies.append(0.0)
+        else:
+            relative_energies.append(0.0)
+
+        # Get positions from the conformer
+        if len(mol.conformers) > 0:
+            positions.append(mol.conformers[0].to_openmm())
+
+    # Convert relative energies to absolute energies
+    # (add back the first conformer's energy, which is 0)
+    energies = [
+        (rel_e + relative_energies[0]) * unit.kilocalorie / unit.mole
+        for rel_e in relative_energies
+    ]
+
+    return energies, positions
+
+
+# def get_rmsd(
+#     molecule: Molecule,
+#     reference: list[unit.Quantity],
+#     target: list[unit.Quantity],
+# ) -> float:
+#     """Compute the RMSD between two sets of coordinates using RDKit with alignment."""
+#     # Create two seperate mols for alignment
+#     ref_mol = Molecule(molecule)
+#     tgt_mol = Molecule(molecule)
+
+#     # Add the reference conformer
+#     ref_mol.conformers.clear()
+#     ref_mol.add_conformer(openmm_to_openff_positions([reference])[0])
+
+#     # Add the target conformer
+#     tgt_mol.conformers.clear()
+#     tgt_mol.add_conformer(openmm_to_openff_positions([target])[0])
+
+#     # Convert to RDKit molecules
+#     ref_rdkit = ref_mol.to_rdkit()
+#     tgt_rdkit = tgt_mol.to_rdkit()
+
+#     # Align target to reference and calculate RMSD
+#     rmsd = Chem.rdMolAlign.AlignMol(tgt_rdkit, ref_rdkit)
+
+#     return rmsd
 
 
 def get_rmsd(
@@ -291,7 +423,7 @@ def main(bespoke_ff_name: str, bespoke_ff_path: str) -> None:
             logger.info(f"Skipping {row['id']} as CREST directory already exists.")
             continue
         crest_dir.mkdir(parents=True, exist_ok=True)
-        rthr = CREST_RMSD_THRESHOLDS[row["id"]]
+        rthr = CREST_RMSD_THRESHOLDS.get(row["id"], 0.125)
         run_crest(row["id"], row["smiles"], crest_dir, rthr=rthr)
 
     overall_results = {}
@@ -304,25 +436,52 @@ def main(bespoke_ff_name: str, bespoke_ff_path: str) -> None:
 
         # Get the base and output directories
         crest_dir = crest_output_dirs[row["id"]]
-        analysis_dir = OUTPUT_DIR / row["id"]
-
-        if analysis_dir.exists():
-            logger.info(f"Skipping {row['id']} as analysis directory already exists.")
-            continue
-
-        analysis_dir.mkdir()
 
         # Get the Molecules and force fields
-        mols = Molecule.from_file(crest_dir / f"{row['id']}_conformers.sdf")
+        try:
+            mols = Molecule.from_file(crest_dir / f"{row['id']}_conformers.sdf")
+            if not isinstance(mols, list):
+                logger.warning(
+                    f"Skipping {row['id']} as only a single conformer found in SDF."
+                )
+                continue
 
-        # Randomly sample 30 conformers if there are more than that
-        if len(mols) > 30:
-            mols = list(np.random.choice(mols, size=30, replace=False))
+        except RadicalsNotSupportedError:
+            logger.warning(
+                f"Skipping {row['id']} due to radicals not supported by OpenFF Toolkit."
+            )
+            continue
+
+        # Combine all conformers into a single Molecule
+        mol = Molecule(mols[0])
+        mol.conformers.clear()
+        for m in mols:
+            for conf in m.conformers:
+                mol.add_conformer(conf)
+
+        # Randomly sample MAX_CONFORMERS_PER_MOL conformers if there are more than that
+        if len(mol.conformers) > MAX_CONFORMERS_PER_MOL:
+
+            idxs = np.random.choice(
+                len(mol.conformers), size=MAX_CONFORMERS_PER_MOL, replace=False
+            )
+            # Sort to ensure we retain order of increasing energy
+            idxs.sort()
+            mol._conformers = [mol.conformers[i] for i in idxs]
+
+        logger.info(f"Loaded {len(mol.conformers)} conformers for {row['id']}")
 
         ffs = {
             "bespoke": ForceField(
                 bespoke_ff_path,
             ),
+            # "bespoke1": ForceField("output/egret1_opt_reg/combined_forcefield.offxml"),
+            # "bespoke2": ForceField(
+            #     "output/egret1_opt_reg_repeat_2/combined_forcefield.offxml"
+            # ),
+            # "bespoke3": ForceField(
+            #     "output/egret1_opt_reg_repeat_3/combined_forcefield.offxml"
+            # ),
             "sage": ForceField("openff_unconstrained-2.3.0-rc2.offxml"),
             "bespokefit_1": ForceField(
                 "../input_forcefields/sage-default-bespoke.offxml"
@@ -332,35 +491,146 @@ def main(bespoke_ff_name: str, bespoke_ff_path: str) -> None:
             ),
         }
 
-        # Get the energies and positions from the ML potential
-        mlp_energies = []
-        mlp_positions = []
-        ff_energies_and_positions = {
-            ff_name: {"energies": [], "positions": []} for ff_name in ffs.keys()
-        }
+        # Check if MLP SDF already exists
+        mlp_sdf_path = crest_dir / f"{row['id']}_mlp_minimised.sdf"
 
-        ff_interchanges = {
-            ff_name: Interchange.from_smirnoff(ffs[ff_name], mols[0].to_topology())
-            for ff_name in ffs.keys()
-        }
-        ff_systems = {
-            ff_name: interchange.to_openmm()
-            for ff_name, interchange in ff_interchanges.items()
-        }
-
-        for mol in tqdm(mols, desc="Calculating energies for all conformers"):
-            mol_mlp_energies, mol_mlp_positions = get_energies_and_positions_mlp(
+        if mlp_sdf_path.exists():
+            logger.info(f"MLP minimised SDF already exists for {row['id']}")
+            mlp_energies, mlp_positions = read_conformers_from_sdf(mlp_sdf_path)
+        else:
+            logger.info(f"Calculating MLP minimised structures for {row['id']}")
+            mlp_energies, mlp_positions = get_energies_and_positions_mlp(
                 mol, mlp_name="egret-1"
             )
-            mlp_energies.extend(mol_mlp_energies)
-            mlp_positions.extend(mol_mlp_positions)
-            off_positions = openmm_to_openff_positions(mol_mlp_positions)
-            mol._conformers = off_positions
 
-            for ff_name, ff_system in ff_systems.items():
-                mol_ff_energies, mol_ff_positions = get_energies_ff(mol, ff_system)
-                ff_energies_and_positions[ff_name]["energies"].extend(mol_ff_energies)
-                ff_energies_and_positions[ff_name]["positions"].extend(mol_ff_positions)
+            # Save MLP-minimised structures to CREST directory
+            save_conformers_to_sdf(
+                mols[0], mlp_positions, mlp_energies, mlp_sdf_path, name_prefix="mlp"
+            )
+            logger.info(f"Saved MLP-minimised structures to {mlp_sdf_path}")
+
+        # Update the molecule with the minimised MLP positions
+        mol._conformers = openmm_to_openff_positions(mlp_positions)
+
+        analysis_dir = OUTPUT_DIR / row["id"]
+
+        if analysis_dir.exists():
+            logger.info(f"Skipping {row['id']} as analysis directory already exists.")
+            continue
+
+        analysis_dir.mkdir()
+
+        ff_energies_and_positions = {}
+
+        for ff_name in ffs.keys():
+            ff_sdf_path = analysis_dir / f"{row['id']}_{ff_name}_minimised.sdf"
+            if ff_sdf_path.exists():
+                logger.info(f"{ff_name} minimised SDF already exists for {row['id']}")
+                ff_energies, ff_positions = read_conformers_from_sdf(ff_sdf_path)
+            else:
+                logger.info(
+                    f"Calculating {ff_name} minimised structures for {row['id']}"
+                )
+
+                ff_energies, ff_positions = get_energies_ff(
+                    mol, ffs[ff_name], minimise=True
+                )
+
+                # Save FF-minimised structures to analysis directory
+                save_conformers_to_sdf(
+                    mols[0],
+                    ff_positions,
+                    ff_energies,
+                    ff_sdf_path,
+                    name_prefix=ff_name,
+                )
+                logger.info(f"Saved {ff_name} minimised structures to {ff_sdf_path}")
+
+            ff_energies_and_positions[ff_name] = {
+                "energies": ff_energies,
+                "positions": ff_positions,
+            }
+
+        # # Also add on the aimnet2 energies and forces
+        # logger.info("Calculating energies and positions with AIMNet2")
+        # aimnet2_energies, aimnet2_positions = get_energies_and_positions_mlp(
+        #     mol, "aimnet2_wb97m_d3_ens", minimise=False
+        # )
+        # ff_energies_and_positions["aimnet2"] = {
+        #     "energies": aimnet2_energies,
+        #     "positions": aimnet2_positions,
+        # }
+
+        # if mlp_sdf_path.exists() and all_ff_sdfs_exist:
+        #     # Read back energies and positions from existing SDF files
+        #     logger.info(f"Reading existing minimised structures for {row['id']}")
+        #     mlp_positions, mlp_energies = read_conformers_from_sdf(mlp_sdf_path)
+
+        #     ff_energies_and_positions = {}
+        #     for ff_name in ffs.keys():
+        #         ff_sdf_path = analysis_dir / f"{row['id']}_{ff_name}_minimised.sdf"
+        #         ff_positions, ff_energies = read_conformers_from_sdf(ff_sdf_path)
+        #         ff_energies_and_positions[ff_name] = {
+        #             "energies": ff_energies,
+        #             "positions": ff_positions,
+        #         }
+
+        #     logger.info(f"Loaded {len(mlp_positions)} conformers from existing files")
+        # else:
+        #     # Calculate energies and positions
+        #     logger.info(f"Calculating energies for {row['id']}")
+
+        #     # Get the energies and positions from the ML potential
+        #     mlp_energies = []
+        #     mlp_positions = []
+        #     ff_energies_and_positions = {
+        #         ff_name: {"energies": [], "positions": []} for ff_name in ffs.keys()
+        #     }
+
+        #     ff_interchanges = {
+        #         ff_name: Interchange.from_smirnoff(ffs[ff_name], mols[0].to_topology())
+        #         for ff_name in ffs.keys()
+        #     }
+        #     ff_systems = {
+        #         ff_name: interchange.to_openmm()
+        #         for ff_name, interchange in ff_interchanges.items()
+        #     }
+
+        #     for mol in tqdm(mols, desc="Calculating energies for all conformers"):
+        #         mol_mlp_energies, mol_mlp_positions = get_energies_and_positions_mlp(
+        #             mol, mlp_name="egret-1"
+        #         )
+        #         mlp_energies.extend(mol_mlp_energies)
+        #         mlp_positions.extend(mol_mlp_positions)
+        #         off_positions = openmm_to_openff_positions(mol_mlp_positions)
+        #         mol._conformers = off_positions
+
+        #         for ff_name, ff_system in ff_systems.items():
+        #             mol_ff_energies, mol_ff_positions = get_energies_ff(mol, ff_system)
+        #             ff_energies_and_positions[ff_name]["energies"].extend(
+        #                 mol_ff_energies
+        #             )
+        #             ff_energies_and_positions[ff_name]["positions"].extend(
+        #                 mol_ff_positions
+        #             )
+
+        #     # Save MLP-minimised structures to CREST directory
+        #     save_conformers_to_sdf(
+        #         mols[0], mlp_positions, mlp_energies, mlp_sdf_path, name_prefix="mlp"
+        #     )
+        #     logger.info(f"Saved MLP-minimised structures to {mlp_sdf_path}")
+
+        #     # Save MM force field minimised structures to analysis directory
+        #     for ff_name, data in ff_energies_and_positions.items():
+        #         ff_sdf_path = analysis_dir / f"{row['id']}_{ff_name}_minimised.sdf"
+        #         save_conformers_to_sdf(
+        #             mols[0],
+        #             data["positions"],
+        #             data["energies"],
+        #             ff_sdf_path,
+        #             name_prefix=ff_name,
+        #         )
+        #         logger.info(f"Saved {ff_name} minimised structures to {ff_sdf_path}")
 
         # Calculate the energy stats
         mlp_energies_array = np.array([energy.magnitude for energy in mlp_energies])
@@ -376,24 +646,44 @@ def main(bespoke_ff_name: str, bespoke_ff_path: str) -> None:
             for ff_name, energies in ff_energies_arrays.items()
         }
 
-        # Calculate the RMSE and MAE
+        # Calculate the RMSE and MAE and store in DataFrame
         energy_stats = {}
+        energy_stats_list = []
+        for ff_name, energies in ff_energies_arrays.items():
+            rmse = np.sqrt(np.mean((energies - mlp_energies_array) ** 2))
+            mae = np.mean(np.abs(energies - mlp_energies_array))
+            energy_stats[ff_name] = {"rmse": rmse, "mae": mae}
+            energy_stats_list.append(
+                {
+                    "force_field": ff_name,
+                    "rmse_kcal_mol": rmse,
+                    "mae_kcal_mol": mae,
+                }
+            )
+            logger.info(f"{ff_name} RMSE: {rmse:.4f} kcal/mol, MAE: {mae:.4f} kcal/mol")
+
+        # Save energy stats to CSV
+        energy_stats_df = pd.DataFrame(energy_stats_list)
+        energy_stats_df.to_csv(analysis_dir / "energy_stats.csv", index=False)
+
+        # Also save to text file for backward compatibility
         with open(analysis_dir / "energy_stats.txt", "w") as f:
             for ff_name, energies in ff_energies_arrays.items():
-                rmse = np.sqrt(np.mean((energies - mlp_energies_array) ** 2))
-                mae = np.mean(np.abs(energies - mlp_energies_array))
-                energy_stats[ff_name] = {"rmse": rmse, "mae": mae}
-                logger.info(
-                    f"{ff_name} RMSE: {rmse:.4f} kcal/mol, MAE: {mae:.4f} kcal/mol"
-                )
+                rmse = energy_stats[ff_name]["rmse"]
+                mae = energy_stats[ff_name]["mae"]
                 f.write(
                     f"{ff_name} RMSE: {rmse:.4f} kcal/mol, MAE: {mae:.4f} kcal/mol\n"
                 )
 
         # Plot the energies and save
         fig, ax = plt.subplots(figsize=(7, 6))
-        for ff_name, energies in ff_energies_arrays.items():
+        for i, (ff_name, energies) in enumerate(ff_energies_arrays.items()):
             ax.scatter(mlp_energies_array, energies, label=ff_name)
+            # Annotate every dot with the index for the first force field only
+            if i == 0:
+                for i in range(len(mlp_energies_array)):
+                    ax.annotate(str(i), (mlp_energies_array[i], energies[i]))
+
         min_val = np.array(
             np.min(mlp_energies_array),
             np.min([np.min(energies) for energies in ff_energies_arrays.values()]),
@@ -416,7 +706,7 @@ def main(bespoke_ff_name: str, bespoke_ff_path: str) -> None:
         fig.savefig(analysis_dir / "energy_comparison.png", dpi=300)
 
         # Calculate RMSDs to the MLP minimised structures
-        ff_rmsds = {ff_name: [] for ff_name in ffs.keys()}
+        ff_rmsds = {ff_name: [] for ff_name in ff_energies_and_positions.keys()}
         for i in range(len(mlp_positions)):
             mlp_pos = mlp_positions[i]
             for ff_name, data in ff_energies_and_positions.items():
@@ -424,21 +714,40 @@ def main(bespoke_ff_name: str, bespoke_ff_path: str) -> None:
                 rmsd = get_rmsd(mols[0], mlp_pos, ff_pos)
                 ff_rmsds[ff_name].append(rmsd)
 
-        # Print RMSD statistics
+        # Calculate RMSD statistics and store in DataFrame
         rmsd_stats = {}
+        rmsd_stats_list = []
+        for ff_name, rmsds in ff_rmsds.items():
+            mean_rmsd = np.mean(rmsds)
+            max_rmsd = np.max(rmsds)
+            rms_rmsd = np.sqrt(np.mean(np.array(rmsds) ** 2))
+            rmsd_stats[ff_name] = {
+                "rms_rmsd": rms_rmsd,
+                "mean_rmsd": mean_rmsd,
+                "max_rmsd": max_rmsd,
+            }
+            rmsd_stats_list.append(
+                {
+                    "force_field": ff_name,
+                    "rms_rmsd_angstrom": rms_rmsd,
+                    "mean_rmsd_angstrom": mean_rmsd,
+                    "max_rmsd_angstrom": max_rmsd,
+                }
+            )
+            logger.info(
+                f"{ff_name} RMS RMSD: {rms_rmsd:.4f} Å, Mean RMSD: {mean_rmsd:.4f} Å, Max RMSD: {max_rmsd:.4f} Å"
+            )
+
+        # Save RMSD stats to CSV
+        rmsd_stats_df = pd.DataFrame(rmsd_stats_list)
+        rmsd_stats_df.to_csv(analysis_dir / "rmsd_stats.csv", index=False)
+
+        # Also save to text file for backward compatibility
         with open(analysis_dir / "rmsd_stats.txt", "w") as f:
             for ff_name, rmsds in ff_rmsds.items():
-                mean_rmsd = np.mean(rmsds)
-                max_rmsd = np.max(rmsds)
-                rms_rmsd = np.sqrt(np.mean(np.array(rmsds) ** 2))
-                rmsd_stats[ff_name] = {
-                    "rms_rmsd": rms_rmsd,
-                    "mean_rmsd": mean_rmsd,
-                    "max_rmsd": max_rmsd,
-                }
-                logger.info(
-                    f"{ff_name} RMS RMSD: {rms_rmsd:.4f} Å, Mean RMSD: {mean_rmsd:.4f} Å, Max RMSD: {max_rmsd:.4f} Å"
-                )
+                rms_rmsd = rmsd_stats[ff_name]["rms_rmsd"]
+                mean_rmsd = rmsd_stats[ff_name]["mean_rmsd"]
+                max_rmsd = rmsd_stats[ff_name]["max_rmsd"]
                 f.write(
                     f"{ff_name} RMS RMSD: {rms_rmsd:.4f} Å, Mean RMSD: {mean_rmsd:.4f} Å, Max RMSD: {max_rmsd:.4f} Å\n"
                 )
@@ -477,9 +786,141 @@ def main(bespoke_ff_name: str, bespoke_ff_path: str) -> None:
             "rmsd_stats": rmsd_stats,
         }
 
-    # Write the overall results to a file
-    with open(OVERALL_STATS_PATH, "wb") as f:
-        pkl.dump(overall_results, f)
+    # Create summary DataFrames for all targets
+    all_energy_stats = []
+    all_rmsd_stats = []
+
+    for target_id, stats in overall_results.items():
+        # Energy stats
+        for ff_name, energy_stat in stats["energy_stats"].items():
+            all_energy_stats.append(
+                {
+                    "target": target_id,
+                    "force_field": ff_name,
+                    "rmse_kcal_mol": energy_stat["rmse"],
+                    "mae_kcal_mol": energy_stat["mae"],
+                }
+            )
+
+        # RMSD stats
+        for ff_name, rmsd_stat in stats["rmsd_stats"].items():
+            all_rmsd_stats.append(
+                {
+                    "target": target_id,
+                    "force_field": ff_name,
+                    "rms_rmsd_angstrom": rmsd_stat["rms_rmsd"],
+                    "mean_rmsd_angstrom": rmsd_stat["mean_rmsd"],
+                    "max_rmsd_angstrom": rmsd_stat["max_rmsd"],
+                }
+            )
+
+    # Create DataFrames
+    energy_summary_df = pd.DataFrame(all_energy_stats)
+    rmsd_summary_df = pd.DataFrame(all_rmsd_stats)
+
+    # Save summary CSVs
+    energy_summary_df.to_csv(OUTPUT_DIR / "all_targets_energy_stats.csv", index=False)
+    rmsd_summary_df.to_csv(OUTPUT_DIR / "all_targets_rmsd_stats.csv", index=False)
+
+    logger.info(f"Saved summary statistics to {OUTPUT_DIR}")
+
+    # Create summary plots
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+
+    # Plot 1: RMSE by force field
+    ax = axes[0, 0]
+    energy_pivot = energy_summary_df.pivot(
+        index="target", columns="force_field", values="rmse_kcal_mol"
+    )
+    energy_pivot.plot(kind="bar", ax=ax)
+    ax.set_xlabel("Target")
+    ax.set_ylabel("RMSE (kcal/mol)")
+    ax.set_title("Energy RMSE by Target and Force Field")
+    ax.legend(title="Force Field", bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.tick_params(axis="x", rotation=45)
+
+    # Plot 2: MAE by force field
+    ax = axes[0, 1]
+    mae_pivot = energy_summary_df.pivot(
+        index="target", columns="force_field", values="mae_kcal_mol"
+    )
+    mae_pivot.plot(kind="bar", ax=ax)
+    ax.set_xlabel("Target")
+    ax.set_ylabel("MAE (kcal/mol)")
+    ax.set_title("Energy MAE by Target and Force Field")
+    ax.legend(title="Force Field", bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.tick_params(axis="x", rotation=45)
+
+    # Plot 3: RMS RMSD by force field
+    ax = axes[1, 0]
+    rms_rmsd_pivot = rmsd_summary_df.pivot(
+        index="target", columns="force_field", values="rms_rmsd_angstrom"
+    )
+    rms_rmsd_pivot.plot(kind="bar", ax=ax)
+    ax.set_xlabel("Target")
+    ax.set_ylabel("RMS RMSD (Å)")
+    ax.set_title("RMS RMSD by Target and Force Field")
+    ax.legend(title="Force Field", bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.tick_params(axis="x", rotation=45)
+
+    # Plot 4: Mean RMSD by force field
+    ax = axes[1, 1]
+    mean_rmsd_pivot = rmsd_summary_df.pivot(
+        index="target", columns="force_field", values="mean_rmsd_angstrom"
+    )
+    mean_rmsd_pivot.plot(kind="bar", ax=ax)
+    ax.set_xlabel("Target")
+    ax.set_ylabel("Mean RMSD (Å)")
+    ax.set_title("Mean RMSD by Target and Force Field")
+    ax.legend(title="Force Field", bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.tick_params(axis="x", rotation=45)
+
+    plt.tight_layout()
+    fig.savefig(OUTPUT_DIR / "all_targets_summary.png", dpi=300, bbox_inches="tight")
+    logger.info(f"Saved summary plots to {OUTPUT_DIR / 'all_targets_summary.png'}")
+
+    # Create box plots for each metric across all targets
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+
+    # Box plot 1: RMSE
+    ax = axes[0, 0]
+    energy_summary_df.boxplot(column="rmse_kcal_mol", by="force_field", ax=ax)
+    ax.set_xlabel("Force Field")
+    ax.set_ylabel("RMSE (kcal/mol)")
+    ax.set_title("Energy RMSE Distribution Across All Targets")
+    plt.sca(ax)
+    plt.xticks(rotation=45)
+
+    # Box plot 2: MAE
+    ax = axes[0, 1]
+    energy_summary_df.boxplot(column="mae_kcal_mol", by="force_field", ax=ax)
+    ax.set_xlabel("Force Field")
+    ax.set_ylabel("MAE (kcal/mol)")
+    ax.set_title("Energy MAE Distribution Across All Targets")
+    plt.sca(ax)
+    plt.xticks(rotation=45)
+
+    # Box plot 3: RMS RMSD
+    ax = axes[1, 0]
+    rmsd_summary_df.boxplot(column="rms_rmsd_angstrom", by="force_field", ax=ax)
+    ax.set_xlabel("Force Field")
+    ax.set_ylabel("RMS RMSD (Å)")
+    ax.set_title("RMS RMSD Distribution Across All Targets")
+    plt.sca(ax)
+    plt.xticks(rotation=45)
+
+    # Box plot 4: Mean RMSD
+    ax = axes[1, 1]
+    rmsd_summary_df.boxplot(column="mean_rmsd_angstrom", by="force_field", ax=ax)
+    ax.set_xlabel("Force Field")
+    ax.set_ylabel("Mean RMSD (Å)")
+    ax.set_title("Mean RMSD Distribution Across All Targets")
+    plt.sca(ax)
+    plt.xticks(rotation=45)
+
+    plt.tight_layout()
+    fig.savefig(OUTPUT_DIR / "all_targets_boxplots.png", dpi=300, bbox_inches="tight")
+    logger.info(f"Saved box plots to {OUTPUT_DIR / 'all_targets_boxplots.png'}")
 
 
 if __name__ == "__main__":

@@ -58,7 +58,8 @@ rule run_hyperparameter_tuning:
             run_bespokefit_all_smiles(config_file,
                                       input.smiles_file,
                                       "hyperparameter_tuning",
-                                      config)
+                                      config, # Use the config name as subdir name
+                                      from_precomputed=False)
 
 # Analyse all the hyperparameter tuning results at once
 rule analyse_hyperparameter_tuning:
@@ -70,7 +71,6 @@ rule analyse_hyperparameter_tuning:
         dummy_output="hyperparameter_tuning/analysis/dummy_output.txt"
     run:
         from yammbs.scripts.run_torsion_comparisons import main
-        from bespokefit_smee.utils.rdkit_bespoke_wrapper import use_bespoke_rdkit_toolkit
         from pathlib import Path
         analysis_dir = Path("hyperparameter_tuning/analysis")
         analysis_dir.mkdir(parents=True, exist_ok=True)
@@ -137,8 +137,10 @@ rule analyse_torsionnet_500:
         cd torsionnet_500/analysis
         yammbs_analyse_torsions --base-force-fields openff_unconstrained-2.3.0-rc2.offxml \
         --extra-force-fields ../output/espaloma03/combined_forcefield.offxml \
+        --extra-force-fields ../output/egret1_opt/combined_forcefield.offxml \
         --extra-force-fields ../output/{wildcards.config}/combined_forcefield.offxml \
         --qcarchive-torsion-data ../input/TNet500_minimal_dataset.json &&
+        python ../scripts/get_summary.py {wildcards.config} &&
         touch {output.dummy_output}
         cd ../..
         """
@@ -163,6 +165,36 @@ rule analyse_torsionnet_500:
         # --extra-force-fields ../output/aimnet2/combined_forcefield.offxml \
         # --extra-force-fields ../output/aimnet2_metad/combined_forcefield.offxml \
         # --extra-force-fields ../output/egret1_metad/combined_forcefield.offxml \
+
+rule analyse_jacs_conformers_frags_torsions:
+    input:
+        # config_file="configs/{config}.yaml",
+        force_field="jacs_set_conformers_frags_torsions/output/{config}/combined_forcefield.offxml",
+        input_data="jacs_set_conformers_frags_torsions/input/input.json"
+    output:
+        dummy_output="jacs_set_conformers_frags_torsions/analysis/{config}_dummy_output.txt"
+    shell:
+        """
+        mkdir -p jacs_set_conformers_frags_torsions/analysis
+        cd jacs_set_conformers_frags_torsions/analysis
+        yammbs_analyse_torsions --base-force-fields openff_unconstrained-2.3.0-rc2.offxml \
+        --extra-force-fields ../../input_forcefields/sage-default-bespoke.offxml \
+        --extra-force-fields ../output/{wildcards.config}/combined_forcefield.offxml \
+        --qcarchive-torsion-data ../input/input.json &&
+        python ../scripts/get_summary.py {wildcards.config} &&
+        touch {output.dummy_output}
+        cd ../..
+        """
+        # --extra-force-fields ../output/md_plus_tor_min_longer_dual_ens_all_ml_energy_no_restr/combined_forcefield.offxml \
+        # --extra-force-fields ../output/egret1_opt_reg/combined_forcefield.offxml \
+        # yammbs_analyse_torsions --base-force-fields openff_unconstrained-2.3.0-rc2.offxml \
+        # --extra-force-fields ../../input_forcefields/espaloma.offxml \
+        # --extra-force-fields ../output/egret1_opt_reg_ml_min_shorter/combined_forcefield.offxml \
+        # --extra-force-fields ../output/egret1_opt_reg/combined_forcefield.offxml \
+        # --extra-force-fields ../output/egret1_opt_reg_ml_min_shorter/combined_forcefield.offxml \
+        # python ../scripts/get_summary.py {wildcards.config} &&
+        # --extra-force-fields ../../input_forcefields/egret1.offxml \
+        # --extra-force-fields ../output/egret1_opt_reg/combined_forcefield.offxml \
 
 rule get_jacs_conformers_input:
     output:
