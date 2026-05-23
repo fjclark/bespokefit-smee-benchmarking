@@ -283,9 +283,16 @@ def subset_folmsbee_smiles(
     selection_strategy: str,
     seed: int,
     exclude_smarts: list[str] | None = None,
+    include_smarts: list[str] | None = None,
 ) -> None:
-    """Filter Folmsbee molecules and write a subset of per-molecule .smi files."""
+    """Filter Folmsbee molecules and write a subset of per-molecule .smi files.
+
+    ``include_smarts`` keeps only molecules matching at least one pattern;
+    ``exclude_smarts`` drops molecules matching any pattern. Both are applied
+    if supplied (include first, then exclude).
+    """
     exclude_smarts = exclude_smarts or []
+    include_smarts = include_smarts or []
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for existing in output_dir.glob("*.smi"):
@@ -331,6 +338,15 @@ def subset_folmsbee_smiles(
         window_df["reference_energy_window_kcal_mol"] >= min_reference_energy_window
     ].copy()
     eligible_ids = set(eligible_df["name"].tolist())
+
+    if include_smarts:
+        compiled_include = _compile_smarts(include_smarts)
+        smarts_included: set[str] = set()
+        for molecule_id in eligible_ids:
+            matches = _smarts_matches(smiles_by_id[molecule_id], compiled_include)
+            if matches:
+                smarts_included.add(molecule_id)
+        eligible_ids = eligible_ids & smarts_included
 
     if exclude_smarts:
         compiled_smarts = _compile_smarts(exclude_smarts)

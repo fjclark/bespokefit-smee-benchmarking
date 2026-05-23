@@ -691,7 +691,14 @@ checkpoint subset_folmsbee_smiles:
         seed=lambda wc: folmsbee_target_config(wc).get("subset_seed", config["random_seed"]),
         exclude_smarts_opts=lambda wc: " ".join(
             f"--exclude-smarts '{smarts}'"
-            for smarts in config["folmsbee_analysis"].get("exclude_smarts", [])
+            for smarts in folmsbee_target_config(wc).get(
+                "exclude_smarts",
+                config["folmsbee_analysis"].get("exclude_smarts", []),
+            )
+        ),
+        include_smarts_opts=lambda wc: " ".join(
+            f"--include-smarts '{smarts}'"
+            for smarts in folmsbee_target_config(wc).get("include_smarts", [])
         ),
     shell:
         "pixi run -e default presto-benchmark subset-folmsbee-smiles "
@@ -701,7 +708,8 @@ checkpoint subset_folmsbee_smiles:
         "--max-molecules {params.max_molecules} "
         "--selection-strategy {params.selection_strategy} "
         "--seed {params.seed} "
-        "{params.exclude_smarts_opts}"
+        "{params.exclude_smarts_opts} "
+        "{params.include_smarts_opts}"
 
 
 rule create_folmsbee_smiles_csv:
@@ -768,7 +776,10 @@ rule analyse_folmsbee_conformers:
         ],
         exclude_smarts_opts=lambda wc: " ".join(
             f"--exclude-smarts '{smarts}'"
-            for smarts in config["folmsbee_analysis"].get("exclude_smarts", [])
+            for smarts in folmsbee_target_config(wc).get(
+                "exclude_smarts",
+                config["folmsbee_analysis"].get("exclude_smarts", []),
+            )
         ),
         min_conformers_per_molecule=lambda wc: config["folmsbee_analysis"].get(
             "min_conformers_per_molecule", 5

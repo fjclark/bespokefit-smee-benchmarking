@@ -73,9 +73,9 @@ def combine_force_fields(
                             logger.error(
                                 f"Parameter {parameter.smirks} from {ff_name} has different keys than the parameter in the base force field."
                             )
-                            raise ValueError(
-                                f"Parameter {parameter.smirks} from {ff_name} has different keys than the parameter in the base force field."
-                            )
+                            # raise ValueError(
+                            #     f"Parameter {parameter.smirks} from {ff_name} has different keys than the parameter in the base force field."
+                            # )
 
                     if not all(
                         parameter.to_dict()[key] == original_param.to_dict()[key]

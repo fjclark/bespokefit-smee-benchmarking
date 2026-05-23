@@ -171,6 +171,14 @@ def subset_folmsbee_smiles_cli(
         "--exclude-smarts",
         help="SMARTS pattern to exclude molecules before selection (repeatable)",
     ),
+    include_smarts: list[str] = typer.Option(
+        [],
+        "--include-smarts",
+        help=(
+            "SMARTS pattern to require — only molecules matching at least one "
+            "pattern are kept (repeatable). Applied before --exclude-smarts."
+        ),
+    ),
 ) -> None:
     """Subset Folmsbee molecules after SMARTS and reference-window filtering."""
     from convenience_functions.get_folmsbee_input import subset_folmsbee_smiles
@@ -185,6 +193,7 @@ def subset_folmsbee_smiles_cli(
         selection_strategy=selection_strategy,
         seed=seed,
         exclude_smarts=exclude_smarts,
+        include_smarts=include_smarts,
     )
 
 
