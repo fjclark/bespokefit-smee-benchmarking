@@ -105,7 +105,7 @@ folmsbee_analysis:
   mlp_names: ["aimnet2"]
   single_point_mlp: true
   torsion_restraint_force_constant: 100000
-  mm_minimization_steps: -1
+  mm_minimization_steps: 0
   n_processes: null
   targets:
     test:
