@@ -711,5 +711,27 @@ def analyse_tyk2_reproducibility_cli(
     )
 
 
+@app.command("analyse-rbfe")
+def analyse_rbfe_cli(
+    raw_data_dir: Path = typer.Argument(
+        ..., help="Directory containing prediction and experimental CSV files"
+    ),
+    ligands_dir: Path = typer.Argument(
+        ..., help="Directory containing ligand SDF files"
+    ),
+    results_dir: Path = typer.Argument(
+        ..., help="Output directory for analysis results"
+    ),
+) -> None:
+    """Analyse RBFE benchmark results with cinnabar, interactive plots, and statistical tests."""
+    from convenience_functions.analyse_rbfe import analyse_rbfe
+
+    analyse_rbfe(
+        raw_data_dir=raw_data_dir,
+        ligands_dir=ligands_dir,
+        results_dir=results_dir,
+    )
+
+
 if __name__ == "__main__":
     app()

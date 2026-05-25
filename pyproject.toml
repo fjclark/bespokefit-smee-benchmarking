@@ -59,6 +59,7 @@ pydantic-settings = "*"
 pydantic-units = "*"
 # openmm-torch = ">=1.5.1"
 cuda-cudart-dev = ">=12,<13"
+plotmol = "*"
 
 [tool.pixi.feature.openmm-current.dependencies]
 pytorch-gpu = "==2.8.0"

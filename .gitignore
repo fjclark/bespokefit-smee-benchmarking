@@ -180,5 +180,13 @@ cython_debug/
 .snakemake/
 
 # Workflow input and output directories
-benchmarking
+benchmarking/*
+
+# Allow RBFE sandbox inputs to be tracked
+!benchmarking/rbfe_sandbox/
+benchmarking/rbfe_sandbox/*
+!benchmarking/rbfe_sandbox/raw_data/
+!benchmarking/rbfe_sandbox/ligands/
+!benchmarking/rbfe_sandbox/presto_ffs/
+!benchmarking/rbfe_sandbox/README.md
 

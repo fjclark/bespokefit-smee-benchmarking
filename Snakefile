@@ -233,6 +233,8 @@ rule all:
         "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
         # TYK2 congeneric series retrain analysis
         "benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
+        # RBFE benchmark analysis
+        "benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv",
 
 
 ############ General Rules #############
@@ -1099,3 +1101,17 @@ rule plot_protein_torsion_analysis:
     shell:
         "pixi run -e default presto-benchmark plot-protein-torsion {input.minimised_dir} {output[0]} "
         "--names-file {input.qca_names_json}"
+
+
+rule analyse_rbfe:
+    input:
+        raw_data="benchmarking/rbfe_sandbox/raw_data",
+        ligands="benchmarking/rbfe_sandbox/ligands",
+    output:
+        "benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv",
+        "benchmarking/rbfe_sandbox/results/statistical_tests.csv",
+        "benchmarking/rbfe_sandbox/results/panel_dg.png",
+        "benchmarking/rbfe_sandbox/results/panel_ddg.png",
+    shell:
+        "pixi run -e default presto-benchmark analyse-rbfe "
+        "{input.raw_data} {input.ligands} benchmarking/rbfe_sandbox/results"
