@@ -528,6 +528,11 @@ def analyse_torsion_scans_cli(
             "field short keys to include: 'ID' (all FFs) or 'ID:ff1,ff2,...'"
         ),
     ),
+    plot_all_torsions: bool = typer.Option(
+        False,
+        "--plot-all-torsions",
+        help="Plot scan profiles for every torsion ID",
+    ),
 ) -> None:
     """Run yammbs torsion scan analysis and generate metrics/plots."""
     from convenience_functions.yammbs_torsion_analysis import analyse_torsion_scans
@@ -553,7 +558,23 @@ def analyse_torsion_scans_cli(
         method=method,
         n_processes=n_processes,
         torsion_ff_map=torsion_ff_map or None,
+        plot_all_torsions=plot_all_torsions,
     )
+
+
+@app.command("draw-molecule")
+def draw_molecule_cli(
+    smiles: str = typer.Argument(..., help="SMILES string of the molecule"),
+    output_path: Path = typer.Argument(..., help="Output PNG path"),
+) -> None:
+    """Draw a 2D molecule image in the same style as torsion scan plots."""
+    from rdkit.Chem import AllChem, Draw, MolFromSmiles
+
+    mol = MolFromSmiles(smiles)
+    AllChem.Compute2DCoords(mol)
+    image = Draw.MolToImage(mol, size=(500, 350))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(str(output_path))
 
 
 @app.command("plot-ablation-comparison")

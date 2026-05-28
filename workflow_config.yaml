@@ -169,6 +169,20 @@ tyk2_congeneric_series:
   config_name: "one_it_aimnet2_no_msm"
   retrain_max_extend_distances: [0, 1, 2, 3]
 
+# TYK2 cyclopropyl edges torsion scan analysis
+tyk2_cyclopropyl_edges_torsions:
+  qca_dataset: "OpenFF-benchmark-ligand-fragments-v2.0"
+  qcarchive_ids:
+    - 80030539  # jmc_23
+    - 80032714  # ejm_46
+    - 80030532  # jmc_28
+    - 80032744  # ejm_55
+  force_fields:
+    - "benchmarking/rbfe_sandbox/presto_ffs/tyk2/bespoke_ff.offxml"
+    - "input_ff/openff_unconstrained-1.3.1.offxml"
+  reference_fragments:
+    ejm_31: "CC(=O)Nc1ccccn1"
+
 # 1mer protein joint-fit benchmark configuration
 protein_1mer_joint_fit:
   config_names:

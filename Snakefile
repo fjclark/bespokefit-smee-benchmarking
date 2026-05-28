@@ -235,6 +235,8 @@ rule all:
         "benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
         # RBFE benchmark analysis
         "benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv",
+        # TYK2 cyclopropyl edges torsion analysis
+        "benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json",
 
 
 ############ General Rules #############
@@ -1046,6 +1048,57 @@ rule analyse_jacs_fragments_full_mol_fits_per_force_field:
 
 
 
+
+rule get_tyk2_cyclopropyl_edges_torsions_input:
+    output:
+        "benchmarking/tyk2_cyclopropyl_edges_torsions/input/tyk2_cyclopropyl_edges_torsions.json"
+    params:
+        qca_dataset_name=config["tyk2_cyclopropyl_edges_torsions"]["qca_dataset"],
+        include_id_opts=" ".join(
+            f"--qcarchive-id {rid}"
+            for rid in config["tyk2_cyclopropyl_edges_torsions"]["qcarchive_ids"]
+        ),
+        exclude_opts=qca_exclude_smiles_opts(
+            config["tyk2_cyclopropyl_edges_torsions"]["qca_dataset"]
+        ),
+    shell:
+        "pixi run -e default presto-benchmark get-qca-torsion-input "
+        "'{params.qca_dataset_name}' {output[0]} {params.exclude_opts} {params.include_id_opts}"
+
+
+rule analyse_tyk2_cyclopropyl_edges_torsions:
+    input:
+        qca_data_json=rules.get_tyk2_cyclopropyl_edges_torsions_input.output[0],
+        primary_ff=config["tyk2_cyclopropyl_edges_torsions"]["force_fields"][0],
+        extra_ffs=config["tyk2_cyclopropyl_edges_torsions"]["force_fields"][1:],
+    output:
+        metrics_json="benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json",
+        minimized_json="benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/minimized.json",
+        plot_png="benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/plots/rmse.png",
+        paired_stats_png="benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/plots/paired_stats.png",
+        paired_stats_no_sig_png="benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/plots/paired_stats_no_sig.png",
+    params:
+        analysis_dir="benchmarking/tyk2_cyclopropyl_edges_torsions/analysis",
+        extra_ff_opts=" ".join(
+            f"--extra-force-field '{ff}'"
+            for ff in config["tyk2_cyclopropyl_edges_torsions"]["force_fields"][1:]
+        ),
+        draw_cmds=(
+            " && " + " && ".join(
+                f"pixi run -e no-openeye presto-benchmark draw-molecule "
+                f"'{smiles}' benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/plots/{name}.png"
+                for name, smiles in config["tyk2_cyclopropyl_edges_torsions"]
+                .get("reference_fragments", {})
+                .items()
+            )
+            if config["tyk2_cyclopropyl_edges_torsions"].get("reference_fragments")
+            else ""
+        ),
+    shell:
+        "pixi run -e no-openeye presto-benchmark analyse-torsion-scans "
+        "{input.qca_data_json} {input.primary_ff} {params.analysis_dir} "
+        "{params.extra_ff_opts} --plot-all-torsions"
+        "{params.draw_cmds}"
 
 
 ############ Proteins #############

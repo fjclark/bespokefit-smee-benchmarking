@@ -68,6 +68,7 @@ def analyse_torsion_scans(
     ] = "openmm_torsion_restrained",
     n_processes: int | None = None,
     torsion_ff_map: dict[int, list[str]] | None = None,
+    plot_all_torsions: bool = False,
 ) -> None:
     """Run yammbs torsion analysis across selected force fields."""
     force_fields = base_force_fields + extra_force_fields
@@ -91,6 +92,9 @@ def analyse_torsion_scans(
             n_processes=processes,
             method=method,
         )
+
+    if plot_all_torsions:
+        torsion_ff_map = {tid: [] for tid in store.get_torsion_ids()}
 
     output_minimized.parent.mkdir(parents=True, exist_ok=True)
     output_metrics.parent.mkdir(parents=True, exist_ok=True)

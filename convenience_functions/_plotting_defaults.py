@@ -34,6 +34,9 @@ FORCE_FIELD_DISPLAY_MAP: dict[str, str] = {
     # JACS Fragments
     "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml": "presto",
     "input_ff/bespokefit1_sage_jacs_frags.offxml": "OpenFF\nBespokeFit/\nB3LYP-D3BJ/DZVP",
+    # TYK2 cyclopropyl edges
+    "benchmarking/rbfe_sandbox/presto_ffs/tyk2/bespoke_ff.offxml": "presto",
+    "input_ff/openff_unconstrained-1.3.1.offxml": "OpenFF 1.3.1",
 }
 
 # ---------------------------------------------------------------------------
@@ -101,6 +104,9 @@ FORCE_FIELD_COLOR_MAP: dict[str, str] = {
     "openff-2.3.0": "#D55E00",
     "OpenFF\nBespokeFit/\nB3LYP-D3BJ/DZVP": "#CC79A7",
     "input_ff/bespokefit1_sage_jacs_frags.offxml": "#CC79A7",
+    # TYK2 cyclopropyl edges
+    "benchmarking/rbfe_sandbox/presto_ffs/tyk2/bespoke_ff.offxml": "#E69F00",
+    "input_ff/openff_unconstrained-1.3.1.offxml": "#D55E00",
     # Ablation short keys (parent dir name from combined_force_field.offxml paths)
     "default": "#0072B2",
     "no_metad": "#009E73",
