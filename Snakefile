@@ -194,48 +194,41 @@ def tyk2_congeneric_retrain_labels() -> list[str]:
 
 
 rule all:
+    # Default target: builds exactly the results reported in presto_paper.tex.
+    # Each entry is an analysis endpoint; the force fields, fits, and downloads it
+    # depends on are pulled in transitively. Targets are grouped by paper section so
+    # this list doubles as an index (see README.md for the full section -> target map).
     input:
-        # Folmsbee/Hutchison conformer benchmark input
-        "benchmarking/folmsbee_conformers/input/gh_repo",
-        # TNet 500 validation force fields for different ablations
-        "benchmarking/tnet500/output/validation/default/combined_force_field.offxml",
-        "benchmarking/tnet500/output/validation/no_reg/combined_force_field.offxml",
-        "benchmarking/tnet500/output/validation/no_min/combined_force_field.offxml",
-        "benchmarking/tnet500/output/validation/one_it/combined_force_field.offxml",
-        "benchmarking/tnet500/output/validation/no_metad/combined_force_field.offxml",
-        # Full TNet 500 workflow
-        "benchmarking/tnet500/output/test/default/combined_force_field.offxml",
-        # JACS Fragments
-        "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml",
-        # Phosphate torsion drives
-        "benchmarking/phosphate_torsion_drives/output/test/default/combined_force_field.offxml",
-        # Folmsbee conformer analysis
-        "benchmarking/folmsbee_conformers/analysis/test/default/aggregate_stats.csv",
-        # yammbs torsion analyses
+        # ===================== Main text =====================
+        # TorsionNet500 test set (Sec. "presto reduces torsion scan RMSE...", Table 1, Fig. 2)
         "benchmarking/tnet500/analysis/test/default/metrics.json",
+        # Workflow component ablations (Sec. "Metadynamics, minimised samples...", Figs. 3-4)
         "benchmarking/tnet500/analysis/validation/ablations/metrics.json",
-        "benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json",
-        "benchmarking/tnet500_reopt_v4/analysis/validation/ablations/metrics.json",
+        # JACS fragment torsion scans (Sec. "presto produces similar results to QM...", Table 2)
         "benchmarking/jacs_fragments/analysis/test/default/metrics.json",
-        "benchmarking/phosphate_torsion_drives/analysis/test/default/metrics.json",
-        # JACS Fragments full-molecule fits transfer benchmark (per supplied FF)
-        expand(
-            "benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/metrics.json",
-            ff_label=full_molecule_fit_force_field_labels(),
-        ),
-        # smiles.csv descriptor analysis aggregate
+        # Folmsbee relative conformer energies (Sec. "presto improves relative conformer
+        # energies...", Fig. 5, Table 3); AIMNet2 reference, config "aimnet2"
+        "benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv",
+        # Congeneric series type specificity (Sec. "presto allows simultaneous training...")
+        "benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
+        # Relative binding free energies (Sec. "Free Energy Calculations", Fig. 6, Table 4)
+        "benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv",
+
+        # ================= Supporting information =================
+        # Dataset descriptor summary statistics
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
-        # Validation fit error summary aggregate
+        # presto validation-set per-atom energy RMSEs
         "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv",
         "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.tex",
-        # TYK2 reproducibility parameter variability analysis
+        # TorsionNet500 results with B3LYP-D3(BJ)/DZVP reference (reoptimised v4)
+        "benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json",
+        "benchmarking/tnet500_reopt_v4/analysis/validation/ablations/metrics.json",
+        # Fit reproducibility / parameter convergence (TYK2 ligand, 10 repeats)
         "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
-        # TYK2 congeneric series retrain analysis
-        "benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
-        # RBFE benchmark analysis
-        "benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv",
-        # TYK2 cyclopropyl edges torsion analysis
+        # Folmsbee phosphate/sulfonamide rerun without MSM and MLP minimisation
+        "benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv",
+        # TYK2 cyclopropanecarboxamide edge torsion scans
         "benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json",
 
 

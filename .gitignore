@@ -179,14 +179,54 @@ cython_debug/
 # Snakemake
 .snakemake/
 
-# Workflow input and output directories
-benchmarking/*
+# Workflow input and output directories.
+# Large datasets, per-molecule fits, minimised geometries (minimized.json),
+# torsion databases (*.sqlite), plots, and the many exploratory/"saved" runs are
+# ignored. Selected key, lightweight outputs -- and the paper's combined force
+# fields -- are re-included below so results can be inspected and reused without
+# rerunning the GPU-heavy workflow.
+benchmarking/**
+# Descend into every subdirectory so the specific files below can be re-included.
+!benchmarking/**/
+# ...but keep the downloaded Folmsbee repository clones ignored (these are embedded
+# git repos / regenerable inputs, not outputs).
+benchmarking/**/gh_repo/
+benchmarking/**/conformer-benchmark/
 
-# Allow RBFE sandbox inputs to be tracked
-!benchmarking/rbfe_sandbox/
-benchmarking/rbfe_sandbox/*
-!benchmarking/rbfe_sandbox/raw_data/
-!benchmarking/rbfe_sandbox/ligands/
-!benchmarking/rbfe_sandbox/presto_ffs/
+# --- Combined bespoke force fields used in the paper ---
+# (Note: the Folmsbee and JACS files are tens of MB.)
+!benchmarking/tnet500/output/validation/default/combined_force_field.offxml
+!benchmarking/tnet500/output/validation/no_reg/combined_force_field.offxml
+!benchmarking/tnet500/output/validation/no_min/combined_force_field.offxml
+!benchmarking/tnet500/output/validation/one_it/combined_force_field.offxml
+!benchmarking/tnet500/output/validation/no_metad/combined_force_field.offxml
+!benchmarking/tnet500/output/test/default/combined_force_field.offxml
+!benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml
+!benchmarking/folmsbee_conformers/output/test/aimnet2/combined_force_field.offxml
+!benchmarking/folmsbee_conformers/output/phosphate_sulphonamide/aimnet2_no_msm_no_min/combined_force_field.offxml
+
+# --- Key, lightweight analysis outputs (source data for paper tables/figures) ---
+!benchmarking/tnet500/analysis/test/default/metrics.json
+!benchmarking/tnet500/analysis/validation/ablations/metrics.json
+!benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json
+!benchmarking/tnet500_reopt_v4/analysis/validation/ablations/metrics.json
+!benchmarking/jacs_fragments/analysis/test/default/metrics.json
+!benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json
+!benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv
+!benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv
+!benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv
+!benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.csv
+!benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex
+!benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv
+!benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex
+!benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv
+!benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.tex
+
+# --- RBFE sandbox: committed inputs, precomputed predictions, and key results ---
+!benchmarking/rbfe_sandbox/raw_data/**
+!benchmarking/rbfe_sandbox/ligands/**
+!benchmarking/rbfe_sandbox/presto_ffs/**
 !benchmarking/rbfe_sandbox/README.md
+!benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv
+!benchmarking/rbfe_sandbox/results/statistical_tests.csv
 
