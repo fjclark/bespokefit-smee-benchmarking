@@ -846,9 +846,11 @@ checkpoint split_tnet500_input:
         validation_set_dir=directory("benchmarking/tnet500/input/validation"),
         validation_set_json="benchmarking/tnet500/input/validation/validation.json",
         validation_set_smiles=directory("benchmarking/tnet500/input/validation/smiles"),
+        validation_set_smiles_csv="benchmarking/tnet500/input/validation/smiles.csv",
         test_set_dir=directory("benchmarking/tnet500/input/test"),
         test_set_json="benchmarking/tnet500/input/test/test.json",
         test_set_smiles=directory("benchmarking/tnet500/input/test/smiles"),
+        test_set_smiles_csv="benchmarking/tnet500/input/test/smiles.csv",
     shell:
         "pixi run -e default presto-benchmark split-qca-input {input[0]} {output.test_set_dir} "
         "--frac-test {TNET_500_FRAC_TEST} --seed {RANDOM_SEED} "
