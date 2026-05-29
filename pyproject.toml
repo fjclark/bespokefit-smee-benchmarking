@@ -74,7 +74,7 @@ pytorch-gpu = "==2.7.1"
 openmm = "<8.5"
 openmm-ml = ">=1.5"
 openmm-torch = ">=1.5.1"
-torchmd-net = "*"
+torchmd-net = ">=2,<3"
 
 [tool.pixi.feature.cinnabar.dependencies]
 networkx = "*"
