@@ -37,7 +37,7 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 
 - **GPU.** The `presto` fits (`run_presto`) and the MLP-based analyses require a GPU and CUDA. Most fitting/analysis rules request a GPU via their SLURM resources.
 - **Committed outputs.** Most of `benchmarking/` is git-ignored, but the results needed to inspect the paper's findings without rerunning anything are committed:
-  - the **combined bespoke force fields** (`combined_force_field.offxml`) for each paper dataset, under `benchmarking/<dataset>/output/...`. Note these are large — the Folmsbee and JACS force fields in particular.
+  - the **combined bespoke force fields** (`combined_force_field.offxml`) for each paper dataset, under `benchmarking/<dataset>/output/...`. Note these are large (the Folmsbee and JACS force fields in particular).
   - the **lightweight analysis outputs** that back the tables and figures: the torsion-scan `metrics.json` files, Folmsbee `aggregate_stats.csv`, the descriptor and validation-error aggregates, the congeneric/reproducibility summaries, and the RBFE `bootstrap_statistics.csv` / `statistical_tests.csv`.
 
   Heavy or intermediate artifacts (per-molecule fits, `minimized.json`, `*.sqlite` torsion databases, plots/HTML, and all exploratory/"saved" runs) remain ignored. The exact re-included paths are listed in `.gitignore`.
