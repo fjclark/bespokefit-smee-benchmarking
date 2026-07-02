@@ -1,5 +1,9 @@
 # presto-benchmarking
-[`presto`](https://github.com/cole-group/presto) is a tool for fitting bespoke SMIRNOFF force fields for your molecule(s) of interest. This repo contains a `Snakemake` workflow that reproduces all of the results in the `presto` paper, with the exception of the Tango relative binding free energy (RBFE) calculations. Tango is not publicly available, so its precomputed predictions are committed under `benchmarking/rbfe_sandbox/` and the workflow only re-runs the downstream analysis.
+[`presto`](https://github.com/cole-group/presto) is a tool for fitting bespoke SMIRNOFF force fields for your molecule(s) of interest. This repo contains a `Snakemake` workflow that reproduces all of the results in the `presto` paper:
+
+> Finlay Clark, Thomas Pope, Sarah Maier, Simon Boothroyd, Joshua T. Horton, Kevin Ryczko, Andrea Bortolato, and Daniel J. Cole. *Fast training of bespoke SMIRNOFF-format molecular mechanics force fields using machine learning potentials.* ChemRxiv (2025). https://chemrxiv.org/doi/full/10.26434/chemrxiv.15004169/v2
+
+with the exception of the Tango relative binding free energy (RBFE) calculations. Tango is not publicly available, so its precomputed predictions are committed under `benchmarking/rbfe_sandbox/` and the workflow only re-runs the downstream analysis.
 
 To rerun the full workflow (the default target builds results for every section of the paper), [install `pixi`](https://pixi.prefix.dev/latest/installation/), configure Snakemake to use SLURM (see below) and run:
 ```bash
@@ -8,7 +12,6 @@ cd presto-benchmarking
 pixi install --all
 pixi run snakemake --cores all
 ```
-
 Configuring Snamkemake to use SLURM and running on a cluster is crucial if you intend to reproduce the fitting stage, which requires many GPU jobs.
 
 ## Reproducing the paper
