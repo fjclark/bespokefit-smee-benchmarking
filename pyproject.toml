@@ -156,11 +156,14 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pixi.tasks]
-# Run the workflow without the fits: forbids the fit rules and the analyses that
-# need the raw per-molecule fit internals (analyse_presto_fits + the tyk2
-# fit-trajectory analyses). Torsion/conformer analyses still regenerate from the
-# combined force fields. Extra args are appended, e.g. `pixi run snakemake-no-refit -n`.
-snakemake-no-refit = { cmd = "snakemake --allowed-rules $(snakemake --list | awk '{print $1}' | grep -vE '^(run_presto|create_combined_force_field|run_tyk2_reproducibility|run_tyk2_congeneric_series|run_tyk2_congeneric_series_retrain|run_1mer_backbone_joint_fit|create_1mer_backbone_joint_fit_force_field|analyse_presto_fits|analyse_tyk2_reproducibility|analyse_tyk2_congeneric_series_retrains|aggregate_validation_fit_errors)$') --cores all" }
+# Reproduce the analyses from the committed combined force fields without the
+# fitting stage (see README "Reproducing the analyses without rerunning the fits").
+# skip_fits makes create_combined_force_field accept the committed *.offxml as-is
+# and drops rule all's fit-dependent targets (per-atom RMSEs, tyk2 reproducibility,
+# congeneric retrains), which need the uncommitted raw fits. Everything else
+# regenerates from the combined force fields. Extra args are appended, e.g.
+# `pixi run snakemake-no-refit -n`.
+snakemake-no-refit = { cmd = "snakemake --config skip_fits=True --cores all" }
 pre-commit = { cmd = "pre-commit run --all-files" }
 lint = { cmd = "ruff check convenience_functions" }
 format = { cmd = "ruff format convenience_functions && ruff check --fix --select I convenience_functions" }

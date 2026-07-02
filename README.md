@@ -36,11 +36,15 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 
 ### Reproducing the analyses without rerunning the fits
 
-The combined bespoke force fields are committed (see [Committed outputs](#requirements-and-notes)), so you can reproduce the downstream analyses without the expensive GPU fitting stage — and without SLURM:
+The combined bespoke force fields are committed (see [Committed outputs](#requirements-and-notes)), so you can reproduce the downstream analyses without the expensive many-GPU-job fitting stage — and without SLURM:
 ```bash
 pixi run snakemake-no-refit
 ```
-This forbids the fitting rules (so Snakemake accepts the committed `combined_force_field.offxml` files as-is) along with the analyses that read the raw per-molecule fit internals, which are not committed. The torsion-scan and conformer-energy analyses regenerate from the combined force fields.  The analyses that read the raw fits — the **SI presto validation per-atom energy RMSEs** (`analyse_presto_fits`), **SI fit reproducibility** (TYK2), and the **congeneric-series retrain** analysis — are *not* recomputed this way. Recomputing them from scratch requires the full fitting stage.
+This sets `--config skip_fits=True`, which makes `create_combined_force_field` accept the committed `combined_force_field.offxml` files as-is (rather than trying to rebuild them from the per-molecule fits, which are not committed). The torsion-scan, charge-split, conformer-energy (Folmsbee), descriptor, and RBFE analyses all regenerate from the committed force fields. Pass `-n` for a dry run, or a specific target to build one section.
+
+The Folmsbee analyses use the raw fits only to list which molecules were fit; with `skip_fits` that molecule set is taken from the committed input SMILES instead, so they reproduce from the combined force field alone (a GPU is still needed for the AIMNet2 single points).
+
+Three results genuinely depend on the raw per-molecule fits (loss curves, per-atom energies, fit trajectories), so `skip_fits` drops them from the default target and leaves their committed summary outputs in place: the **SI presto validation per-atom energy RMSEs**, **SI fit reproducibility** (TYK2), and the **congeneric-series retrain** analysis. Recomputing those requires the full fitting stage.
 
 ### Requirements and notes
 

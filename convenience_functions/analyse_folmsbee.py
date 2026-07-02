@@ -324,6 +324,33 @@ def _collect_presto_molecules(presto_output_dir: Path) -> set[str]:
     }
 
 
+def _collect_molecule_roster(
+    presto_output_dir: Path, smiles_dir: Path | None = None
+) -> set[str]:
+    """Molecule names to analyse: those PRESTO fit, or a smiles-dir fallback.
+
+    The evaluation itself only needs the (committed) combined force field; the raw
+    per-molecule fits are used solely to enumerate which molecules were fit. When
+    those fit directories are absent (e.g. reproducing from committed force fields
+    without the fitting stage) fall back to the per-molecule ``.smi`` files in
+    ``smiles_dir``, whose stems are the same molecule IDs. This file set is what
+    ``smiles.csv`` is generated from and only contains successfully processed
+    molecules, so it matches the fit roster.
+    """
+    fitted = _collect_presto_molecules(presto_output_dir)
+    if fitted:
+        return fitted
+    if smiles_dir is not None and Path(smiles_dir).is_dir():
+        names = {path.stem for path in Path(smiles_dir).glob("*.smi")}
+        if names:
+            logger.info(
+                f"No PRESTO fit directories under {presto_output_dir}; using "
+                f"{len(names)} molecules from {smiles_dir}"
+            )
+            return names
+    return fitted
+
+
 def _load_smiles_by_molecule(folmsbee_repo_dir: Path) -> dict[str, str]:
     smiles_file = folmsbee_repo_dir / "SMILES" / "molecules.smi"
     if not smiles_file.exists():
@@ -1738,6 +1765,7 @@ def analyse_folmsbee(
     exclude_smarts: list[str] | None = None,
     min_conformers_per_molecule: int = 5,
     min_reference_energy_window: float = 0.0,
+    molecule_roster_smiles_dir: Path | None = None,
 ) -> None:
     """Evaluate and compare conformer energies from the Folmsbee/Hutchison benchmark.
 
@@ -1802,7 +1830,9 @@ def analyse_folmsbee(
     molecule_geometry_dirs = {
         k: str(v) for k, v in _resolve_molecule_geometry_dirs(folmsbee_repo_dir).items()
     }
-    presto_molecule_names = _collect_presto_molecules(presto_output_dir)
+    presto_molecule_names = _collect_molecule_roster(
+        presto_output_dir, smiles_dir=molecule_roster_smiles_dir
+    )
     logger.info(f"Loaded {len(presto_molecule_names)} molecules from PRESTO output")
 
     smiles_by_molecule = _load_smiles_by_molecule(folmsbee_repo_dir)

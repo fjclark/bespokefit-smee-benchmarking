@@ -7,6 +7,13 @@ configfile: "workflow_config.yaml"
 
 RANDOM_SEED = config["random_seed"]
 TNET_500_FRAC_TEST = config["tnet500_frac_test"]
+
+# Reproduce analyses from the committed combined force fields without the fitting
+# stage. Enable with `--config skip_fits=True` (see the snakemake-no-refit task).
+# When set, create_combined_force_field accepts the committed *.offxml as-is
+# (no per-molecule fits required) and rule all drops the results that genuinely
+# need the raw fits (see FIT_DEPENDENT_TARGETS).
+SKIP_FITS = str(config.get("skip_fits", "")).lower() in ("true", "1", "yes")
 TNET500_REOPT_V4_QCA_DATASET = "TorsionNet500 Re-optimization TorsionDrives v4.0"
 
 QCA_DATASET_NAMES = {
@@ -42,7 +49,15 @@ def validation_force_fields(wildcards: Any) -> list[str]:
     the per-molecule force field paths after the relevant checkpoint completes.
     Tries a dataset-specific checkpoint (split_{dataset}_input) first; falls back
     to split_test_only_input for datasets without a dedicated checkpoint.
+
+    In skip_fits mode the per-molecule fits are not required (the committed
+    combined force field is used as-is), so return no inputs; this leaves the
+    committed combined_force_field.offxml up to date rather than forcing a rebuild
+    from missing fits.
     """
+    if SKIP_FITS:
+        return []
+
     dataset = wildcards.dataset
     checkpoint_kwargs: dict = {}
     if dataset == "folmsbee_conformers":
@@ -122,9 +137,26 @@ def smiles_csv_input(wildcards: Any) -> str:
     return f"benchmarking/{dataset}/input/{wildcards.dataset_type}/smiles.csv"
 
 
+def folmsbee_smiles_dir(wildcards: Any) -> str:
+    """Per-molecule .smi directory for a folmsbee split.
+
+    Used by analyse_folmsbee_conformers to enumerate molecules when the raw fit
+    directories are absent (reproducing from committed force fields). Resolves the
+    relevant checkpoint so the directory exists before the analysis runs.
+    """
+    dataset_type = wildcards.dataset_type
+    if dataset_type == "test":
+        checkpoints.process_folmsbee_smiles.get()
+    else:
+        checkpoints.subset_folmsbee_smiles.get(dataset_type=dataset_type)
+    return f"benchmarking/folmsbee_conformers/input/{dataset_type}/smiles"
+
+
 def smiles_descriptor_summary_input(wildcards: Any) -> list[str]:
     """Return smiles descriptor summary dependency for datasets that produce smiles.csv."""
-    if wildcards.dataset == "folmsbee_conformers":
+    # In skip_fits mode create_combined_force_field must not rebuild, so give it no
+    # inputs that could go stale relative to the committed combined force field.
+    if SKIP_FITS or wildcards.dataset == "folmsbee_conformers":
         return []
 
     return [
@@ -223,11 +255,28 @@ def tyk2_congeneric_retrain_labels() -> list[str]:
 ############ Workflow Rules #############
 
 
+# Results that require the raw per-molecule PRESTO fits (loss curves, per-atom
+# energies, fit trajectories), which are not committed. Dropped from rule all when
+# running with --config skip_fits=True; their committed summary outputs are used
+# instead. Recomputing them needs the full fitting stage.
+FIT_DEPENDENT_TARGETS = [
+    # Congeneric series type specificity (Sec. "presto allows simultaneous training...")
+    "benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
+    # SI presto validation-set per-atom energy RMSEs
+    "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv",
+    "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.tex",
+    # SI fit reproducibility / parameter convergence (TYK2 ligand, 10 repeats)
+    "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
+]
+
+
 rule all:
     # Default target: builds exactly the results reported in presto_paper.tex.
     # Each entry is an analysis endpoint; the force fields, fits, and downloads it
     # depends on are pulled in transitively. Targets are grouped by paper section so
     # this list doubles as an index (see README.md for the full section -> target map).
+    # Entries here are reproducible from the committed combined force fields (no raw
+    # fits); the fit-dependent results live in FIT_DEPENDENT_TARGETS above.
     input:
         # ===================== Main text =====================
         # TorsionNet500 test set (Sec. "presto reduces torsion scan RMSE...", Table 1, Fig. 2)
@@ -242,8 +291,6 @@ rule all:
         # Folmsbee relative conformer energies (Sec. "presto improves relative conformer
         # energies...", Fig. 5, Table 3); AIMNet2 reference, config "aimnet2"
         "benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv",
-        # Congeneric series type specificity (Sec. "presto allows simultaneous training...")
-        "benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
         # Relative binding free energies (Sec. "Free Energy Calculations", Fig. 6, Table 4)
         "benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv",
 
@@ -251,18 +298,15 @@ rule all:
         # Dataset descriptor summary statistics
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
-        # presto validation-set per-atom energy RMSEs
-        "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv",
-        "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.tex",
         # TorsionNet500 results with B3LYP-D3(BJ)/DZVP reference (reoptimised v4)
         "benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json",
         "benchmarking/tnet500_reopt_v4/analysis/validation/ablations/metrics.json",
-        # Fit reproducibility / parameter convergence (TYK2 ligand, 10 repeats)
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
         # Folmsbee phosphate/sulfonamide rerun without MSM and MLP minimisation
         "benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv",
         # TYK2 cyclopropanecarboxamide edge torsion scans
         "benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json",
+        # Results needing the raw fits (dropped with --config skip_fits=True)
+        *([] if SKIP_FITS else FIT_DEPENDENT_TARGETS),
 
 
 ############ General Rules #############
@@ -787,6 +831,7 @@ rule analyse_folmsbee_conformers:
     input:
         gh_repo=rules.get_folmsbee_conformer_input.output[0],
         combined_ff="benchmarking/folmsbee_conformers/output/{dataset_type}/{config_name}/combined_force_field.offxml",
+        smiles_dir=folmsbee_smiles_dir,
     output:
         results_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/results.csv",
         per_molecule_stats_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/per_molecule_stats.csv",
@@ -841,6 +886,7 @@ rule analyse_folmsbee_conformers:
     shell:
         "pixi run -e default presto-benchmark analyse-folmsbee "
         "{input.gh_repo} {params.presto_output_dir} {params.analysis_dir} "
+        "--smiles-dir {input.smiles_dir} "
         "--reference-method '{params.reference_method}' "
         "--torsion-restraint-force-constant {params.torsion_restraint_force_constant} "
         "--mm-minimization-steps {params.mm_minimization_steps} "

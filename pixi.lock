@@ -13288,7 +13288,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: cb4615c5b09fd597eed4e64aacac9494ce35dd750f156238c49ce7b6c848fa04
+  sha256: f131081c4f02aaabf54736165d171137d4051b23c577531cfe338411a714fcc1
   requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable

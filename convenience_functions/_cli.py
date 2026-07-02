@@ -262,6 +262,15 @@ def analyse_folmsbee_cli(
             "is below this threshold"
         ),
     ),
+    smiles_dir: Optional[Path] = typer.Option(
+        None,
+        "--smiles-dir",
+        help=(
+            "Directory of per-molecule .smi files used to enumerate molecules when "
+            "the PRESTO fit directories are absent (reproducing from committed force "
+            "fields without the fitting stage)"
+        ),
+    ),
 ) -> None:
     """Analyse Folmsbee conformer energies with restrained minimization."""
     from convenience_functions.analyse_folmsbee import analyse_folmsbee
@@ -283,6 +292,7 @@ def analyse_folmsbee_cli(
         exclude_smarts=exclude_smarts,
         min_conformers_per_molecule=min_conformers_per_molecule,
         min_reference_energy_window=min_reference_energy_window,
+        molecule_roster_smiles_dir=smiles_dir,
     )
 
 
