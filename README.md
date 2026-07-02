@@ -33,6 +33,14 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 | **SI** Folmsbee phosphate/sulfonamide rerun (no MSM/MLP-min) | `benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv` |
 | **SI** TYK2 cyclopropanecarboxamide edge torsion scans | `benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json` |
 
+### Reproducing the analyses without rerunning the fits
+
+The combined bespoke force fields are committed (see [Committed outputs](#requirements-and-notes)), so you can reproduce the downstream analyses without the expensive GPU fitting stage — and without SLURM:
+```bash
+pixi run snakemake-no-refit
+```
+This forbids the fitting rules (so Snakemake accepts the committed `combined_force_field.offxml` files as-is) along with the analyses that read the raw per-molecule fit internals, which are not committed. The torsion-scan and conformer-energy analyses regenerate from the combined force fields.  The analyses that read the raw fits — the **SI presto validation per-atom energy RMSEs** (`analyse_presto_fits`), **SI fit reproducibility** (TYK2), and the **congeneric-series retrain** analysis — are *not* recomputed this way. Recomputing them from scratch requires the full fitting stage.
+
 ### Requirements and notes
 
 - **GPU.** The `presto` fits (`run_presto`) and the MLP-based analyses require a GPU and CUDA. Most fitting/analysis rules request a GPU via their SLURM resources.

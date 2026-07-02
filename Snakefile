@@ -71,6 +71,36 @@ def get_pixi_env(wc):
     env = "presto051" if wc.dataset in ("tnet500", "jacs_fragments") else "default"
     return env
 
+
+def presto_fit_source_dir(wildcards: Any) -> str:
+    """PRESTO fit output directory feeding the per-atom-energy validation analysis.
+
+    Mirrors the presto_output_dir each bundled analysis rule used to pass to
+    analyse-presto-fits: tnet500_reopt_v4 reuses the tnet500 fits, and the
+    ablation analyses read the 'default' config's fits rather than a config
+    literally called 'ablations'.
+    """
+    dataset = wildcards.dataset
+    dataset_type = wildcards.dataset_type
+    config_name = wildcards.config_name
+    if dataset == "tnet500_reopt_v4":
+        return f"benchmarking/tnet500/output/{dataset_type}/default"
+    if config_name == "ablations":
+        return f"benchmarking/{dataset}/output/{dataset_type}/default"
+    return f"benchmarking/{dataset}/output/{dataset_type}/{config_name}"
+
+
+def presto_fit_combined_ff(wildcards: Any) -> str:
+    """Combined force field in the fit source dir, used as a tracked sentinel for the fits."""
+    return f"{presto_fit_source_dir(wildcards)}/combined_force_field.offxml"
+
+
+def presto_fit_pixi_env(wildcards: Any) -> str:
+    """Match the pixi env each original bundled rule used for analyse-presto-fits."""
+    if wildcards.dataset == "tnet500_reopt_v4" or wildcards.config_name == "ablations":
+        return "default"
+    return get_pixi_env(wildcards)
+
 def smiles_csv_input(wildcards: Any) -> str:
     """Resolve smiles.csv path for a dataset/split after the relevant checkpoint."""
     dataset = wildcards.dataset
@@ -592,15 +622,39 @@ rule aggregate_smiles_descriptors:
         "{input.smiles_csvs}"
 
 
+rule analyse_presto_fits:
+    """Per-atom-energy validation RMSE analysis of the raw PRESTO fits.
+
+    Split out from the torsion/conformer analysis rules so that those (which need
+    only the combined force field) can run without the raw per-molecule fit outputs
+    this rule requires.
+    """
+    input:
+        combined_ff=presto_fit_combined_ff,
+    output:
+        summary_csv="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/presto_fit_validation/presto_fit_validation_energy_rmse_summary.csv",
+        summary_tex="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/presto_fit_validation/presto_fit_validation_energy_rmse_summary.tex",
+        plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/presto_fit_validation/presto_fit_validation_energy_rmse.png",
+    wildcard_constraints:
+        dataset="tnet500|tnet500_reopt_v4|jacs_fragments|phosphate_torsion_drives|folmsbee_conformers",
+    params:
+        pixi_env=presto_fit_pixi_env,
+        presto_output_dir=presto_fit_source_dir,
+        output_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}/presto_fit_validation",
+    shell:
+        "pixi run -e {params.pixi_env} presto-benchmark analyse-presto-fits "
+        "{params.presto_output_dir} {params.output_dir} --random-seed {RANDOM_SEED}"
+
+
 rule aggregate_validation_fit_errors:
     input:
-        tnet500_test="benchmarking/tnet500/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
-        jacs_test="benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
-        folmsbee_test="benchmarking/folmsbee_conformers/analysis/test/aimnet2/plots/presto_fit_validation_energy_rmse_summary.csv",
+        tnet500_test="benchmarking/tnet500/analysis/test/default/presto_fit_validation/presto_fit_validation_energy_rmse_summary.csv",
+        jacs_test="benchmarking/jacs_fragments/analysis/test/default/presto_fit_validation/presto_fit_validation_energy_rmse_summary.csv",
+        folmsbee_test="benchmarking/folmsbee_conformers/analysis/test/aimnet2/presto_fit_validation/presto_fit_validation_energy_rmse_summary.csv",
         summary_csvs=[
-            "benchmarking/tnet500/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
-            "benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
-            "benchmarking/folmsbee_conformers/analysis/test/aimnet2/plots/presto_fit_validation_energy_rmse_summary.csv",
+            "benchmarking/tnet500/analysis/test/default/presto_fit_validation/presto_fit_validation_energy_rmse_summary.csv",
+            "benchmarking/jacs_fragments/analysis/test/default/presto_fit_validation/presto_fit_validation_energy_rmse_summary.csv",
+            "benchmarking/folmsbee_conformers/analysis/test/aimnet2/presto_fit_validation/presto_fit_validation_energy_rmse_summary.csv",
         ],
     output:
         aggregate_csv="benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv",
@@ -621,15 +675,11 @@ rule analyse_torsion_scans_yammbs:
         plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/rmse.png",
         paired_stats_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats.png",
         paired_stats_no_sig_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats_no_sig.png",
-        fit_rmse_plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse.png",
-        fit_rmse_summary_csv="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.csv",
-        fit_rmse_summary_tex="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.tex",
     wildcard_constraints:
         dataset="tnet500|tnet500_reopt_v4|jacs_fragments|phosphate_torsion_drives",
     params:
         pixi_env = get_pixi_env,
         analysis_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}",
-        presto_output_dir=lambda wc: f"benchmarking/{wc.dataset}/output/{wc.dataset_type}/{wc.config_name}",
         base_ff_opts=lambda wc: " ".join(
             f"--base-force-field '{ff}'"
             for ff in yammbs_target_config(wc).get(
@@ -644,10 +694,7 @@ rule analyse_torsion_scans_yammbs:
     shell:
         "pixi run -e {params.pixi_env} presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
-        "{params.base_ff_opts} {params.extra_ff_opts} {params.torsion_plot_id_opts} && "
-        "pixi run -e {params.pixi_env} presto-benchmark analyse-presto-fits "
-        "{params.presto_output_dir} {params.analysis_dir}/plots "
-        "--random-seed {RANDOM_SEED}"
+        "{params.base_ff_opts} {params.extra_ff_opts} {params.torsion_plot_id_opts}"
 
 
 ############ Folmsbee Conformers #############
@@ -740,9 +787,6 @@ rule analyse_folmsbee_conformers:
         results_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/results.csv",
         per_molecule_stats_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/per_molecule_stats.csv",
         aggregate_stats_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/aggregate_stats.csv",
-        fit_rmse_plot_png="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse.png",
-        fit_rmse_summary_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.csv",
-        fit_rmse_summary_tex="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.tex",
         plots_dir=directory("benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/plots"),
     params:
         analysis_dir=lambda wc: f"benchmarking/folmsbee_conformers/analysis/{wc.dataset_type}/{wc.config_name}",
@@ -804,10 +848,7 @@ rule analyse_folmsbee_conformers:
         "{params.mlp_opts} "
         "{params.mlp_mode_opt} "
         "{params.precomputed_method_opts} "
-        "{params.n_processes_opt} && "
-        "pixi run -e default presto-benchmark analyse-presto-fits "
-        "{params.presto_output_dir} {params.analysis_dir}/plots "
-        "--random-seed {RANDOM_SEED}"
+        "{params.n_processes_opt}"
 
 
 ############ TNet 500 #############
@@ -871,12 +912,8 @@ rule analyse_tnet500_validation_ablations:
         plot_png="benchmarking/tnet500/analysis/validation/ablations/plots/rmse.png",
         heatmap_png="benchmarking/tnet500/analysis/validation/ablations/plots/heatmap.png",
         distributions_png="benchmarking/tnet500/analysis/validation/ablations/plots/distributions.png",
-        fit_rmse_plot_png="benchmarking/tnet500/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse.png",
-        fit_rmse_summary_csv="benchmarking/tnet500/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse_summary.csv",
-        fit_rmse_summary_tex="benchmarking/tnet500/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse_summary.tex",
     params:
         analysis_dir="benchmarking/tnet500/analysis/validation/ablations",
-        presto_output_dir="benchmarking/tnet500/output/validation/default",
         base_ff_opts=" ".join(
             f"--base-force-field '{ff}'"
             for ff in config["yammbs_analysis"]["base_force_fields"]
@@ -893,9 +930,6 @@ rule analyse_tnet500_validation_ablations:
         "--extra-force-field '{input.one_it_ff}' "
         "--extra-force-field '{input.no_metad_ff}' "
         "{params.torsion_plot_id_opts} && "
-        "pixi run -e default presto-benchmark analyse-presto-fits "
-        "{params.presto_output_dir} {params.analysis_dir}/plots "
-        "--random-seed {RANDOM_SEED} && "
         "pixi run -e default presto-benchmark plot-ablation-comparison "
         "{output.metrics_json} {params.analysis_dir}/plots"
 
@@ -910,12 +944,8 @@ rule analyse_tnet500_reopt_v4_test_default:
         plot_png="benchmarking/tnet500_reopt_v4/analysis/test/default/plots/rmse.png",
         paired_stats_png="benchmarking/tnet500_reopt_v4/analysis/test/default/plots/paired_stats.png",
         paired_stats_no_sig_png="benchmarking/tnet500_reopt_v4/analysis/test/default/plots/paired_stats_no_sig.png",
-        fit_rmse_plot_png="benchmarking/tnet500_reopt_v4/analysis/test/default/plots/presto_fit_validation_energy_rmse.png",
-        fit_rmse_summary_csv="benchmarking/tnet500_reopt_v4/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
-        fit_rmse_summary_tex="benchmarking/tnet500_reopt_v4/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.tex",
     params:
         analysis_dir="benchmarking/tnet500_reopt_v4/analysis/test/default",
-        presto_output_dir="benchmarking/tnet500/output/test/default",
         base_ff_opts=" ".join(
             f"--base-force-field '{ff}'"
             for ff in config["yammbs_analysis"]["base_force_fields"]
@@ -929,10 +959,7 @@ rule analyse_tnet500_reopt_v4_test_default:
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
-        "{params.base_ff_opts} {params.extra_ff_opts} && "
-        "pixi run -e default presto-benchmark analyse-presto-fits "
-        "{params.presto_output_dir} {params.analysis_dir}/plots "
-        "--random-seed {RANDOM_SEED}"
+        "{params.base_ff_opts} {params.extra_ff_opts}"
 
 
 rule analyse_tnet500_reopt_v4_validation_ablations:
@@ -949,12 +976,8 @@ rule analyse_tnet500_reopt_v4_validation_ablations:
         plot_png="benchmarking/tnet500_reopt_v4/analysis/validation/ablations/plots/rmse.png",
         heatmap_png="benchmarking/tnet500_reopt_v4/analysis/validation/ablations/plots/heatmap.png",
         distributions_png="benchmarking/tnet500_reopt_v4/analysis/validation/ablations/plots/distributions.png",
-        fit_rmse_plot_png="benchmarking/tnet500_reopt_v4/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse.png",
-        fit_rmse_summary_csv="benchmarking/tnet500_reopt_v4/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse_summary.csv",
-        fit_rmse_summary_tex="benchmarking/tnet500_reopt_v4/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse_summary.tex",
     params:
         analysis_dir="benchmarking/tnet500_reopt_v4/analysis/validation/ablations",
-        presto_output_dir="benchmarking/tnet500/output/validation/default",
         base_ff_opts=" ".join(
             f"--base-force-field '{ff}'"
             for ff in config["yammbs_analysis"]["base_force_fields"]
@@ -971,9 +994,6 @@ rule analyse_tnet500_reopt_v4_validation_ablations:
         "--extra-force-field '{input.one_it_ff}' "
         "--extra-force-field '{input.no_metad_ff}' "
         "{params.torsion_plot_id_opts} && "
-        "pixi run -e default presto-benchmark analyse-presto-fits "
-        "{params.presto_output_dir} {params.analysis_dir}/plots "
-        "--random-seed {RANDOM_SEED} && "
         "pixi run -e default presto-benchmark plot-ablation-comparison "
         "{output.metrics_json} {params.analysis_dir}/plots"
 
