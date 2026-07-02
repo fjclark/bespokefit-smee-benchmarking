@@ -23,6 +23,7 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 | TorsionNet500 test set | `benchmarking/tnet500/analysis/test/default/metrics.json` |
 | Workflow component ablations (on TorsionNet500) | `benchmarking/tnet500/analysis/validation/ablations/metrics.json` |
 | JACS fragment torsion scans | `benchmarking/jacs_fragments/analysis/test/default/metrics.json` |
+| JACS fragment scans split by molecular charge | `benchmarking/jacs_fragments/analysis/test/default/plots_neutral` and `.../plots_charged` |
 | Folmsbee relative conformer energies | `benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv` |
 | Congeneric series type specificity | `benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv` |
 | Relative binding free energies | `benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv` |
@@ -47,6 +48,7 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
   - The Folmsbee set uses the `aimnet2` config (AIMNet2 as the reference MLP), matching the paper.
   - The JACS full-molecule-fit and TYK2 cyclopropyl torsion analyses use the `no-openeye` environment, matching the environment used by SandboxAQ.
 - **RBFE.** The free-energy section runs entirely from the committed data in `benchmarking/rbfe_sandbox/`; no GPU or download is needed for it.
+- **Charge split.** The `split_torsion_scans_by_charge` rule re-plots an existing torsion analysis (`torsion-data.sqlite` + `metrics.json`) separately for overall-neutral and overall-charged molecules into `plots_neutral/` and `plots_charged/`, each with a `molecule_counts.txt`. It runs from cached data (no fit/download/GPU).
 
 ## Running on a SLURM cluster
 
