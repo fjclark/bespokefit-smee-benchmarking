@@ -74,7 +74,7 @@ pytorch-gpu = "==2.7.1"
 openmm = "<8.5"
 openmm-ml = ">=1.5"
 openmm-torch = ">=1.5.1"
-torchmd-net = "*"
+torchmd-net = ">=2,<3"
 
 [tool.pixi.feature.cinnabar.dependencies]
 networkx = "*"
@@ -156,6 +156,12 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pixi.tasks]
+# Run the workflow without (re)fitting force fields. Forbids the expensive fit
+# rules so Snakemake accepts already-provided *force_field.offxml files as-is and
+# only runs downstream analysis. Extra args are appended, e.g.
+#   pixi run snakemake-no-refit -n
+#   pixi run snakemake-no-refit benchmarking/tnet500/analysis/test/default/metrics.json
+snakemake-no-refit = { cmd = "snakemake --allowed-rules $(snakemake --list | awk '{print $1}' | grep -vE '^(run_presto|create_combined_force_field|run_tyk2_reproducibility|run_tyk2_congeneric_series|run_tyk2_congeneric_series_retrain|run_1mer_backbone_joint_fit|create_1mer_backbone_joint_fit_force_field)$') --cores all" }
 pre-commit = { cmd = "pre-commit run --all-files" }
 lint = { cmd = "ruff check convenience_functions" }
 format = { cmd = "ruff format convenience_functions && ruff check --fix --select I convenience_functions" }

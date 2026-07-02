@@ -16,6 +16,10 @@ def combine_force_fields(
     """
     Combines multiple OpenFF force field XML files into a single force field, starting with a base force field.
 
+    Note that in a few places logger errors are raised but exceptions are not. This is because parameters may have been
+    generated for different stereoisomers, but presto discards stereochemical information when writing SMARTS. Only one set of 
+    parameters will be used for all stereoisomers, and tranferability is assumed.
+
     Parameters:
         ff_to_combine_paths (dict[str, Path]): A dictionary mapping force field names to their file paths.
         output_file (Path): Path to the output XML file for the combined force field.
@@ -73,9 +77,6 @@ def combine_force_fields(
                             logger.error(
                                 f"Parameter {parameter.smirks} from {ff_name} has different keys than the parameter in the base force field."
                             )
-                            # raise ValueError(
-                            #     f"Parameter {parameter.smirks} from {ff_name} has different keys than the parameter in the base force field."
-                            # )
 
                     if not all(
                         parameter.to_dict()[key] == original_param.to_dict()[key]
@@ -84,9 +85,6 @@ def combine_force_fields(
                         logger.error(
                             f"Parameter {parameter.smirks} from {ff_name}: {parameter.to_dict()} is not identical to the parameter in the base force field: {original_param.to_dict()}"
                         )
-                        # raise ValueError(
-                        #     f"Parameter {parameter.smirks} from {ff_name}: {parameter.to_dict()} is not identical to the parameter in the base force field: {original_param.to_dict()}"
-                        # )
                     continue
 
                 # Raise an error if a parameter is already present in the combined force field
@@ -105,9 +103,6 @@ def combine_force_fields(
                     logger.error(
                         f"New parameter {parameter} is not identical to existing parameter with the same SMIRKS: {current_new_params}"
                     )
-                    # raise ValueError(
-                    #     f"New parameter ID {parameter.id} {parameter} already exists in the combined force field."
-                    # )
                     continue
 
                 combined_handler.add_parameter(parameter.to_dict())
