@@ -675,6 +675,7 @@ rule analyse_torsion_scans_yammbs:
     output:
         metrics_json="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/metrics.json",
         minimized_json="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimized.json",
+        database_file="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/torsion-data.sqlite",
         plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/rmse.png",
         paired_stats_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats.png",
         paired_stats_no_sig_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats_no_sig.png",
