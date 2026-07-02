@@ -236,6 +236,9 @@ rule all:
         "benchmarking/tnet500/analysis/validation/ablations/metrics.json",
         # JACS fragment torsion scans (Sec. "presto produces similar results to QM...", Table 2)
         "benchmarking/jacs_fragments/analysis/test/default/metrics.json",
+        # JACS fragment torsion scans split by overall molecular charge
+        "benchmarking/jacs_fragments/analysis/test/default/plots_neutral",
+        "benchmarking/jacs_fragments/analysis/test/default/plots_charged",
         # Folmsbee relative conformer energies (Sec. "presto improves relative conformer
         # energies...", Fig. 5, Table 3); AIMNet2 reference, config "aimnet2"
         "benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv",
@@ -999,6 +1002,28 @@ rule analyse_tnet500_reopt_v4_validation_ablations:
 
 
 ############ JACS Fragments #############
+
+rule split_torsion_scans_by_charge:
+    """Re-plot an existing torsion analysis split into overall neutral/charged molecules.
+
+    Reuses the torsion-data.sqlite and metrics.json produced by
+    analyse_torsion_scans_yammbs and writes plots_neutral/ and plots_charged/
+    alongside them, to help localise where errors come from.
+    """
+    input:
+        database_file="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/torsion-data.sqlite",
+        metrics_json="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/metrics.json",
+    output:
+        neutral_dir=directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots_neutral"),
+        charged_dir=directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots_charged"),
+    wildcard_constraints:
+        dataset="tnet500|tnet500_reopt_v4|jacs_fragments|phosphate_torsion_drives",
+    params:
+        pixi_env=get_pixi_env,
+    shell:
+        "pixi run -e {params.pixi_env} presto-benchmark plot-torsion-scans-by-charge "
+        "{input.database_file} {input.metrics_json} {output.neutral_dir} {output.charged_dir}"
+
 
 rule get_qca_torsion_input_dataset:
     output:

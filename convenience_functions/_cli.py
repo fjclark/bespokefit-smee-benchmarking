@@ -562,6 +562,34 @@ def analyse_torsion_scans_cli(
     )
 
 
+@app.command("plot-torsion-scans-by-charge")
+def plot_torsion_scans_by_charge_cli(
+    database_file: Path = typer.Argument(
+        ..., help="Existing torsion-data.sqlite from analyse-torsion-scans"
+    ),
+    input_metrics: Path = typer.Argument(
+        ..., help="Existing metrics.json from analyse-torsion-scans"
+    ),
+    output_neutral_dir: Path = typer.Argument(
+        ..., help="Output directory for overall-neutral molecule plots"
+    ),
+    output_charged_dir: Path = typer.Argument(
+        ..., help="Output directory for overall-charged molecule plots"
+    ),
+) -> None:
+    """Regenerate torsion metric plots split by overall molecular charge."""
+    from convenience_functions.yammbs_torsion_analysis import (
+        plot_torsion_scans_by_charge,
+    )
+
+    plot_torsion_scans_by_charge(
+        database_file=database_file,
+        input_metrics=input_metrics,
+        output_neutral_dir=output_neutral_dir,
+        output_charged_dir=output_charged_dir,
+    )
+
+
 @app.command("draw-molecule")
 def draw_molecule_cli(
     smiles: str = typer.Argument(..., help="SMILES string of the molecule"),

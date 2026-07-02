@@ -109,25 +109,12 @@ def analyse_torsion_scans(
     with open(output_metrics, "w") as file_handle:
         file_handle.write(metrics.model_dump_json())
 
-    plot_cdfs(output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map)
-    plot_rms_stats(output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map)
-    plot_mean_error_distribution(
-        output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map
-    )
-    plot_rms_js_distance(
-        output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map
-    )
-    plot_paired_stats(
-        output_metrics=output_metrics,
+    _plot_metrics_and_summary(
+        metrics_file=output_metrics,
         plot_dir=plot_dir,
+        force_fields=force_fields,
+        database_file=database_file,
         color_map=color_map,
-        show_significance=True,
-    )
-    plot_paired_stats(
-        output_metrics=output_metrics,
-        plot_dir=plot_dir,
-        color_map=color_map,
-        show_significance=False,
     )
     plot_requested_torsion_scans(
         store=store,
@@ -136,11 +123,167 @@ def analyse_torsion_scans(
         output_dir=plot_dir / "torsion_id_scans",
         color_map=color_map,
     )
+
+
+def _torsion_id_molecule_info(
+    store: TorsionStore, torsion_ids: list[int]
+) -> tuple[dict[int, int], dict[int, str]]:
+    """Return per-torsion-ID parent molecule total charge and canonical SMILES.
+
+    The stored (mapped) SMILES cannot be used to count distinct molecules: the
+    same molecule appears with different atom mappings across torsion records, so
+    counting mapped SMILES overcounts molecules. We therefore also return the
+    canonical (non-mapped) SMILES, computed once per mapped SMILES and reused.
+    """
+    from openff.toolkit import Molecule
+
+    info_by_mapped_smiles: dict[str, tuple[int, str]] = {}
+    charge_by_torsion_id: dict[int, int] = {}
+    canonical_smiles_by_torsion_id: dict[int, str] = {}
+    for torsion_id in torsion_ids:
+        mapped_smiles = store.get_smiles_by_torsion_id(torsion_id)
+        if mapped_smiles not in info_by_mapped_smiles:
+            molecule = Molecule.from_mapped_smiles(
+                mapped_smiles, allow_undefined_stereo=True
+            )
+            info_by_mapped_smiles[mapped_smiles] = (
+                round(molecule.total_charge.m),
+                molecule.to_smiles(mapped=False),
+            )
+        charge, canonical_smiles = info_by_mapped_smiles[mapped_smiles]
+        charge_by_torsion_id[torsion_id] = charge
+        canonical_smiles_by_torsion_id[torsion_id] = canonical_smiles
+    return charge_by_torsion_id, canonical_smiles_by_torsion_id
+
+
+def _filter_metrics_by_torsion_ids(
+    metrics: MetricCollection, keep_ids: set[int]
+) -> MetricCollection:
+    """Return a copy of ``metrics`` keeping only the given torsion IDs."""
+    return MetricCollection(
+        metrics={
+            force_field: {
+                torsion_id: metric
+                for torsion_id, metric in per_force_field.items()
+                if torsion_id in keep_ids
+            }
+            for force_field, per_force_field in metrics.metrics.items()
+        }
+    )
+
+
+def _plot_metrics_and_summary(
+    metrics_file: Path,
+    plot_dir: Path,
+    force_fields: list[str],
+    database_file: Path | None = None,
+    color_map: dict[str, str] | None = None,
+    torsion_ids: set[int] | None = None,
+) -> None:
+    """Generate the metric-based plots and summary table from a metrics file.
+
+    Shared by :func:`analyse_torsion_scans` (full dataset) and
+    :func:`plot_torsion_scans_by_charge` (neutral/charged subsets). When
+    ``torsion_ids`` is given, the summary table's MM-vs-MM row is restricted to
+    those torsions so it stays consistent with the metrics subset.
+    """
+    if color_map is None:
+        color_map = get_force_field_color_map(force_fields)
+
+    plot_cdfs(output_metrics=metrics_file, plot_dir=plot_dir, color_map=color_map)
+    plot_rms_stats(output_metrics=metrics_file, plot_dir=plot_dir, color_map=color_map)
+    plot_mean_error_distribution(
+        output_metrics=metrics_file, plot_dir=plot_dir, color_map=color_map
+    )
+    plot_rms_js_distance(
+        output_metrics=metrics_file, plot_dir=plot_dir, color_map=color_map
+    )
+    plot_paired_stats(
+        output_metrics=metrics_file,
+        plot_dir=plot_dir,
+        color_map=color_map,
+        show_significance=True,
+    )
+    plot_paired_stats(
+        output_metrics=metrics_file,
+        plot_dir=plot_dir,
+        color_map=color_map,
+        show_significance=False,
+    )
     save_summary_table_latex(
-        output_metrics=output_metrics,
+        output_metrics=metrics_file,
         output_table=plot_dir / "summary_metrics.tex",
         database_file=database_file,
+        torsion_ids=torsion_ids,
     )
+
+
+def plot_torsion_scans_by_charge(
+    database_file: Path,
+    input_metrics: Path,
+    output_neutral_dir: Path,
+    output_charged_dir: Path,
+) -> None:
+    """Split an existing torsion analysis into neutral and charged molecule subsets.
+
+    Reuses the metrics and minimised MM data from a completed
+    :func:`analyse_torsion_scans` run and regenerates the metric-based plots
+    separately for torsions belonging to overall-neutral and overall-charged
+    molecules, to help localise where errors come from.
+    """
+    with open(input_metrics) as file_handle:
+        metrics = MetricCollection.model_validate_json(file_handle.read())
+
+    force_fields = list(metrics.metrics.keys())
+    if not force_fields:
+        raise ValueError(f"No force fields found in {input_metrics}")
+
+    metric_torsion_ids = sorted(
+        {
+            torsion_id
+            for per_force_field in metrics.metrics.values()
+            for torsion_id in per_force_field
+        }
+    )
+
+    store = TorsionStore(database_file)
+    charge_by_torsion_id, canonical_smiles_by_torsion_id = _torsion_id_molecule_info(
+        store, metric_torsion_ids
+    )
+
+    neutral_ids = {tid for tid, charge in charge_by_torsion_id.items() if charge == 0}
+    charged_ids = {tid for tid, charge in charge_by_torsion_id.items() if charge != 0}
+
+    for subset_ids, label, output_dir in (
+        (neutral_ids, "neutral", output_neutral_dir),
+        (charged_ids, "charged", output_charged_dir),
+    ):
+        n_molecules = len(
+            {canonical_smiles_by_torsion_id[tid] for tid in subset_ids}
+        )
+        summary_line = (
+            f"Overall-{label} molecules: {n_molecules} molecules, "
+            f"{len(subset_ids)} torsions"
+        )
+        print(f"{summary_line} -> {output_dir}")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "molecule_counts.txt").write_text(summary_line + "\n")
+        subset_metrics = _filter_metrics_by_torsion_ids(metrics, subset_ids)
+        subset_metrics_file = output_dir / "metrics.json"
+        with open(subset_metrics_file, "w") as file_handle:
+            file_handle.write(subset_metrics.model_dump_json())
+
+        if not subset_ids:
+            print(f"No molecules for subset {output_dir}; wrote empty metrics only.")
+            continue
+
+        _plot_metrics_and_summary(
+            metrics_file=subset_metrics_file,
+            plot_dir=output_dir,
+            force_fields=force_fields,
+            database_file=database_file,
+            torsion_ids=subset_ids,
+        )
 
 
 def _get_force_field_display(force_field: str, ff_display_names: dict[str, str]) -> str:
@@ -171,18 +314,25 @@ def _get_mm_vs_mm_metric_arrays(
     target_force_field: str,
     reference_force_field: str,
     js_temperature: float,
+    torsion_ids: set[int] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute per-torsion RMSD, RMSE, and JS(target || reference) from MM outputs."""
+    """Compute per-torsion RMSD, RMSE, and JS(target || reference) from MM outputs.
+
+    When ``torsion_ids`` is provided, only those torsion IDs are included; this
+    keeps the summary table consistent with a charge-filtered metrics subset.
+    """
     from openff.toolkit import Molecule
 
     store = TorsionStore(database_file)
-    torsion_ids = store.get_torsion_ids()
+    all_torsion_ids = store.get_torsion_ids()
+    if torsion_ids is not None:
+        all_torsion_ids = [tid for tid in all_torsion_ids if tid in torsion_ids]
 
     rmsd_values: list[float] = []
     rmse_values: list[float] = []
     js_values: list[float] = []
 
-    for torsion_id in torsion_ids:
+    for torsion_id in all_torsion_ids:
         reference_points = store.get_mm_points_by_torsion_id(
             torsion_id=torsion_id,
             force_field=reference_force_field,
@@ -264,6 +414,7 @@ def create_summary_table(
     random_seed: int = 0,
     presto_reference_candidates: tuple[str, ...] = ("AceFF 2.0", "aceff20", "aceff"),
     presto_target_candidates: tuple[str, ...] = ("presto",),
+    torsion_ids: set[int] | None = None,
 ) -> pd.DataFrame:
     """Create a summary dataframe with bootstrap CIs for selected metrics."""
     metrics = MetricCollection.parse_file(output_metrics)
@@ -350,6 +501,7 @@ def create_summary_table(
                 target_force_field=presto_force_field,
                 reference_force_field=reference_force_field,
                 js_temperature=500.0,
+                torsion_ids=torsion_ids,
             )
 
             if len(rmse_values) > 0 and len(rmsd_values) > 0 and len(js_values) > 0:
@@ -408,6 +560,7 @@ def save_summary_table_latex(
     n_bootstrap: int = 10_000,
     confidence_level: float = 95.0,
     random_seed: int = 0,
+    torsion_ids: set[int] | None = None,
 ) -> None:
     """Create and save the summary dataframe as a LaTeX table."""
     summary_df = create_summary_table(
@@ -417,6 +570,7 @@ def save_summary_table_latex(
         n_bootstrap=n_bootstrap,
         confidence_level=confidence_level,
         random_seed=random_seed,
+        torsion_ids=torsion_ids,
     )
 
     output_table.parent.mkdir(parents=True, exist_ok=True)
