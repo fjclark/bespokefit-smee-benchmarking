@@ -19,6 +19,8 @@ from openff.units import unit
 logger = loguru.logger
 
 _FOLMSBEE_REPO_URL = "https://github.com/ghutchis/conformer-benchmark.git"
+# Pin the exact upstream commit so the downloaded inputs are reproducible.
+_FOLMSBEE_REPO_COMMIT = "0109c8ec7cff3c10d3617ed65392fffc81492755"
 _JOB_SUBDIRS = ("Neutral_jobs", "CHG_jobs")
 
 
@@ -147,6 +149,7 @@ def download_folmsbee_from_gh(path: Path) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     run(["git", "clone", _FOLMSBEE_REPO_URL, str(path)], check=True)
+    run(["git", "-C", str(path), "checkout", _FOLMSBEE_REPO_COMMIT], check=True)
 
 
 def write_folmsbee_smiles_files(molecules_smi: Path, output_dir: Path) -> None:
