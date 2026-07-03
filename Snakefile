@@ -293,6 +293,7 @@ rule all:
         "benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv",
         # Relative binding free energies (Sec. "Free Energy Calculations", Fig. 6, Table 4)
         "benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv",
+        "benchmarking/rbfe_sandbox/results/panel_ddg.png",
 
         # ================= Supporting information =================
         # Dataset descriptor summary statistics
