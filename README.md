@@ -38,9 +38,9 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 
 The combined bespoke force fields are committed (see [Committed outputs](#requirements-and-notes)), so you can reproduce the downstream analyses without the expensive many-GPU-job fitting stage — and without SLURM:
 ```bash
-pixi run snakemake-no-refit
+pixi run snakemake-no-refit --resources exclusive=1
 ```
-This sets `--config skip_fits=True`, which makes `create_combined_force_field` accept the committed `combined_force_field.offxml` files as-is (rather than trying to rebuild them from the per-molecule fits, which are not committed). The torsion-scan, charge-split, conformer-energy (Folmsbee), descriptor, and RBFE analyses all regenerate from the committed force fields. Pass `-n` for a dry run, or a specific target to build one section.
+This sets `--config skip_fits=True`, which makes `create_combined_force_field` accept the committed `combined_force_field.offxml` files as-is (rather than trying to rebuild them from the per-molecule fits, which are not committed). The `--resources exclusive=1` avoids running more than 1 expensive (but non-fitting) jobs at once, which can consume all your RAM. The torsion-scan, charge-split, conformer-energy (Folmsbee), descriptor, and RBFE analyses all regenerate from the committed force fields. Pass `-n` for a dry run, or a specific target to build one section.
 
 The Folmsbee analyses use the raw fits only to list which molecules were fit; with `skip_fits` that molecule set is taken from the committed input SMILES instead, so they reproduce from the combined force field alone (a GPU is still needed for the AIMNet2 single points).
 

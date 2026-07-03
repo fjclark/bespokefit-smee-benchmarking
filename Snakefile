@@ -739,6 +739,8 @@ rule analyse_torsion_scans_yammbs:
             for ff in yammbs_target_config(wc)["extra_force_fields"]
         ),
         torsion_plot_id_opts=lambda wc: build_torsion_plot_opts(yammbs_target_config(wc)),
+    resources:
+        exclusive=1,
     shell:
         "pixi run -e {params.pixi_env} presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
@@ -883,6 +885,8 @@ rule analyse_folmsbee_conformers:
             if config["folmsbee_analysis"].get("n_processes") is not None
             else ""
         ),
+    resources:
+        exclusive=1,
     shell:
         "pixi run -e default presto-benchmark analyse-folmsbee "
         "{input.gh_repo} {params.presto_output_dir} {params.analysis_dir} "
@@ -971,6 +975,8 @@ rule analyse_tnet500_validation_ablations:
         torsion_plot_id_opts=build_torsion_plot_opts(
             config["yammbs_analysis"]["targets"]["tnet500"]["validation"]
         ),
+    resources:
+        exclusive=1,
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.default_ff} {params.analysis_dir} "
@@ -1006,6 +1012,8 @@ rule analyse_tnet500_reopt_v4_test_default:
                 "extra_force_fields"
             ]
         ),
+    resources:
+        exclusive=1,
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
@@ -1035,6 +1043,8 @@ rule analyse_tnet500_reopt_v4_validation_ablations:
         torsion_plot_id_opts=build_torsion_plot_opts(
             config["yammbs_analysis"]["targets"]["tnet500"]["validation"]
         ),
+    resources:
+        exclusive=1,
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.default_ff} {params.analysis_dir} "
@@ -1042,8 +1052,7 @@ rule analyse_tnet500_reopt_v4_validation_ablations:
         "--extra-force-field '{input.no_reg_ff}' "
         "--extra-force-field '{input.no_min_ff}' "
         "--extra-force-field '{input.one_it_ff}' "
-        "--extra-force-field '{input.no_metad_ff}' "
-        "{params.torsion_plot_id_opts} && "
+        "--extra-force-field '{input.no_metad_ff}' &&"
         "pixi run -e default presto-benchmark plot-ablation-comparison "
         "{output.metrics_json} {params.analysis_dir}/plots"
 
@@ -1128,6 +1137,8 @@ rule analyse_jacs_fragments_full_mol_fits_per_force_field:
         torsion_plot_id_opts=build_torsion_plot_opts(
             config["yammbs_analysis"]["targets"]["jacs_fragments_full_mol_fits"]["test"]
         ),
+    resources:
+        exclusive=1,
     shell:
         "pixi run -e no-openeye presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.force_field} {params.analysis_dir} "
@@ -1181,6 +1192,8 @@ rule analyse_tyk2_cyclopropyl_edges_torsions:
             if config["tyk2_cyclopropyl_edges_torsions"].get("reference_fragments")
             else ""
         ),
+    resources:
+        exclusive=1,
     shell:
         "pixi run -e no-openeye presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.primary_ff} {params.analysis_dir} "
